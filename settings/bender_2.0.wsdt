@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="iso-8859-1"?>
+
+<Workspace>
+  <ConfigDictionary>
+    
+  <CurrentConfigs><Project>bender_2.0/Debug</Project></CurrentConfigs></ConfigDictionary>
+  <Desktop>
+    <Static>
+      <Workspace>
+        <ColumnWidths>
+          
+          
+          
+          
+        <Column0>157</Column0><Column1>27</Column1><Column2>27</Column2><Column3>27</Column3></ColumnWidths>
+      </Workspace>
+    <Build><PreferedWindows><Position>3</Position><ScreenPosX>0</ScreenPosX><ScreenPosY>0</ScreenPosY><Windows><Window><Factory>Debug-Log</Factory></Window><Window><Factory>Breakpoints</Factory></Window><Window><Factory>Find-in-Files</Factory></Window></Windows></PreferedWindows><ColumnWidth0>20</ColumnWidth0><ColumnWidth1>1396</ColumnWidth1><ColumnWidth2>372</ColumnWidth2><ColumnWidth3>93</ColumnWidth3></Build><TerminalIO/><Debug-Log><PreferedWindows><Position>3</Position><ScreenPosX>0</ScreenPosX><ScreenPosY>0</ScreenPosY><Windows><Window><Factory>Breakpoints</Factory></Window><Window><Factory>Find-in-Files</Factory></Window></Windows></PreferedWindows><ColumnWidth0>20</ColumnWidth0><ColumnWidth1>1862</ColumnWidth1></Debug-Log><SourceBrowser><PreferedWindows><Position>1</Position><ScreenPosX>0</ScreenPosX><ScreenPosY>0</ScreenPosY><Windows><Window><Factory>Workspace</Factory></Window></Windows></PreferedWindows></SourceBrowser><Disassembly><MixedMode>1</MixedMode><CodeCovShow>1</CodeCovShow><InstrProfShow>1</InstrProfShow></Disassembly><Find-in-Files><PreferedWindows><Position>3</Position><ScreenPosX>0</ScreenPosX><ScreenPosY>0</ScreenPosY><Windows/></PreferedWindows><ColumnWidth0>664</ColumnWidth0><ColumnWidth1>94</ColumnWidth1><ColumnWidth2>1138</ColumnWidth2></Find-in-Files><Breakpoints><PreferedWindows><Position>3</Position><ScreenPosX>0</ScreenPosX><ScreenPosY>0</ScreenPosY><Windows><Window><Factory>Find-in-Files</Factory></Window></Windows></PreferedWindows></Breakpoints></Static>
+    <Windows>
+      
+    <Wnd2>
+        <Tabs>
+          <Tab>
+            <Identity>TabID-10821-31644</Identity>
+            <TabName>Workspace</TabName>
+            <Factory>Workspace</Factory>
+            <Session>
+              
+            <NodeDict><ExpandedNode>bender_2.0</ExpandedNode></NodeDict></Session>
+          </Tab>
+        </Tabs>
+        
+      <SelectedTab>0</SelectedTab></Wnd2><Wnd3><Tabs><Tab><Identity>TabID-4784-25728</Identity><TabName>Build</TabName><Factory>Build</Factory><Session/></Tab></Tabs><SelectedTab>0</SelectedTab></Wnd3></Windows>
+    <Editor>
+      
+      
+      
+      
+    <Pane><Tab><Factory>TextEditor</Factory><Filename>$WS_DIR$\spi.c</Filename><XPos>0</XPos><YPos>40</YPos><SelStart>2636</SelStart><SelEnd>2636</SelEnd></Tab><Tab><Factory>TextEditor</Factory><Filename>$WS_DIR$\LIS3LV02DL.h</Filename><XPos>0</XPos><YPos>0</YPos><SelStart>396</SelStart><SelEnd>396</SelEnd></Tab><Tab><Factory>TextEditor</Factory><Filename>$WS_DIR$\msp430f5310_extra.h</Filename><XPos>0</XPos><YPos>0</YPos><SelStart>3</SelStart><SelEnd>3</SelEnd></Tab><Tab><Factory>TextEditor</Factory><Filename>$WS_DIR$\spi.h</Filename><XPos>0</XPos><YPos>0</YPos><SelStart>209</SelStart><SelEnd>209</SelEnd></Tab><Tab><Factory>TextEditor</Factory><Filename>$WS_DIR$\util.h</Filename><XPos>0</XPos><YPos>0</YPos><SelStart>355</SelStart><SelEnd>355</SelEnd></Tab><Tab><Factory>TextEditor</Factory><Filename>$WS_DIR$\util.c</Filename><XPos>0</XPos><YPos>58</YPos><SelStart>2062</SelStart><SelEnd>2062</SelEnd></Tab><Tab><Factory>TextEditor</Factory><Filename>$WS_DIR$\main.h</Filename><XPos>0</XPos><YPos>0</YPos><SelStart>160</SelStart><SelEnd>160</SelEnd></Tab><Tab><Factory>TextEditor</Factory><Filename>$WS_DIR$\sdfat.h</Filename><XPos>0</XPos><YPos>70</YPos><SelStart>2367</SelStart><SelEnd>2375</SelEnd></Tab><Tab><Factory>TextEditor</Factory><Filename>$WS_DIR$\sdfat.c</Filename><XPos>0</XPos><YPos>312</YPos><SelStart>7126</SelStart><SelEnd>7126</SelEnd></Tab><Tab><Factory>TextEditor</Factory><Filename>$WS_DIR$\LIS3LV02DL.c</Filename><XPos>0</XPos><YPos>86</YPos><SelStart>3181</SelStart><SelEnd>3181</SelEnd></Tab><Tab><Factory>TextEditor</Factory><Filename>$WS_DIR$\L3G4200D.c</Filename><XPos>0</XPos><YPos>102</YPos><SelStart>3606</SelStart><SelEnd>3606</SelEnd></Tab><Tab><Factory>TextEditor</Factory><Filename>$WS_DIR$\..\..\..\..\Program Files (x86)\IAR Systems\Embedded Workbench 6.0\430\inc\msp430f5310.h</Filename><XPos>0</XPos><YPos>2473</YPos><SelStart>151805</SelStart><SelEnd>151805</SelEnd></Tab><Tab><Factory>TextEditor</Factory><Filename>$WS_DIR$\main.c</Filename><XPos>0</XPos><YPos>289</YPos><SelStart>7724</SelStart><SelEnd>7724</SelEnd></Tab><ActiveTab>12</ActiveTab><Tab><Factory>TextEditor</Factory><Filename>$WS_DIR$\msp430f5310_extra.c</Filename><XPos>0</XPos><YPos>97</YPos><SelStart>4835</SelStart><SelEnd>4835</SelEnd></Tab><Tab><Factory>TextEditor</Factory><Filename>$WS_DIR$\circuit.c</Filename><XPos>0</XPos><YPos>31</YPos><SelStart>1673</SelStart><SelEnd>1673</SelEnd></Tab><Tab><Factory>TextEditor</Factory><Filename>$WS_DIR$\accelbuffer.c</Filename><XPos>0</XPos><YPos>54</YPos><SelStart>3014</SelStart><SelEnd>3014</SelEnd></Tab></Pane><ActivePane>0</ActivePane><Sizes><Pane><X>1000000</X><Y>1000000</Y></Pane></Sizes><SplitMode>1</SplitMode></Editor>
+    <Positions>
+      
+      
+      
+      
+      
+    <Top><Row0><Sizes><Toolbar-01218498><key>iaridepm.enu1</key></Toolbar-01218498></Sizes></Row0></Top><Left><Row0><Sizes><Wnd2><Rect><Top>-2</Top><Left>-2</Left><Bottom>739</Bottom><Right>231</Right><x>-2</x><y>-2</y><xscreen>223001</xscreen><yscreen>154</yscreen><sizeHorzCX>176424842</sizeHorzCX><sizeHorzCY>156823</sizeHorzCY><sizeVertCX>184335</sizeVertCX><sizeVertCY>754582</sizeVertCY></Rect></Wnd2></Sizes></Row0></Left><Right><Row0><Sizes/></Row0></Right><Bottom><Row0><Sizes><Wnd3><Rect><Top>-2</Top><Left>-2</Left><Bottom>198</Bottom><Right>1266</Right><x>-2</x><y>-2</y><xscreen>1268</xscreen><yscreen>200</yscreen><sizeHorzCX>1003165</sizeHorzCX><sizeHorzCY>203666</sizeHorzCY><sizeVertCX>158228</sizeVertCX><sizeVertCY>203666</sizeVertCY></Rect></Wnd3></Sizes></Row0></Bottom><Float><Sizes/></Float></Positions>
+  </Desktop>
+</Workspace>
+
+
