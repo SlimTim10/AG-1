@@ -18,6 +18,7 @@ void clock_config(void);
 void rtc_restart(void);
 uint8_t rtc_rdy(void);
 void enable_interrupts(void);
+void disable_interrupts(void);
 void brownout_reset(void);
 void timer_config(void);
 

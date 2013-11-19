@@ -2,7 +2,6 @@
  * Written by Icewire Technologies
  */
 
-#include <stdlib.h>
 #include "accelbuffer.h"
 
 /* 

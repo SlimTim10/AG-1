@@ -2,7 +2,7 @@
 
 <project>
   <fileVersion>2</fileVersion>
-  <fileChecksum>2106116346</fileChecksum>
+  <fileChecksum>29679992</fileChecksum>
   <configuration>
     <name>Debug</name>
     <outputs>
@@ -57,14 +57,16 @@
       <file>$PROJ_DIR$\Debug\Obj\sdfat.pbi</file>
       <file>$PROJ_DIR$\..\..\Dropbox\Prototype\bender\code\bender\lnk430f5310_bender.xcl</file>
       <file>$TOOLKIT_DIR$\config\multiplier32_loc2.xcl</file>
-      <file>$TOOLKIT_DIR$\inc\dlib\c\stdlib.h</file>
       <file>$TOOLKIT_DIR$\inc\dlib\c\stdbool.h</file>
       <file>$PROJ_DIR$\Debug\Obj\accelbuffer.r43</file>
-      <file>$TOOLKIT_DIR$\inc\dlib\c\ysizet.h</file>
       <file>$PROJ_DIR$\Debug\Obj\LIS3LV02DL.pbi</file>
       <file>$PROJ_DIR$\Debug\Obj\accelbuffer.pbi</file>
       <file>$PROJ_DIR$\Debug\Obj\L3G4200D.pbi</file>
       <file>$PROJ_DIR$\Debug\Obj\circuit.pbi</file>
+      <file>$PROJ_DIR$\buttonbuffer.h</file>
+      <file>$PROJ_DIR$\Debug\Obj\buttonbuffer.r43</file>
+      <file>$PROJ_DIR$\Debug\Obj\buttonbuffer.pbi</file>
+      <file>$PROJ_DIR$\buttonbuffer.c</file>
     </outputs>
     <file>
       <name>[ROOT_NODE]</name>
@@ -80,21 +82,21 @@
       <outputs>
         <tool>
           <name>BICOMP</name>
-          <file> 56</file>
+          <file> 54</file>
         </tool>
         <tool>
           <name>ICC430</name>
-          <file> 53</file>
+          <file> 52</file>
         </tool>
       </outputs>
       <inputs>
         <tool>
           <name>BICOMP</name>
-          <file> 51 36 0 24 47 34 45 54 4 26 52</file>
+          <file> 4 26 36 0 24 47 34 45 51</file>
         </tool>
         <tool>
           <name>ICC430</name>
-          <file> 51 36 0 24 42 47 34 45 54 4 26 52</file>
+          <file> 4 26 36 0 24 42 47 34 45 51</file>
         </tool>
       </inputs>
     </file>
@@ -103,7 +105,7 @@
       <outputs>
         <tool>
           <name>BICOMP</name>
-          <file> 58</file>
+          <file> 56</file>
         </tool>
         <tool>
           <name>ICC430</name>
@@ -126,7 +128,7 @@
       <outputs>
         <tool>
           <name>BICOMP</name>
-          <file> 57</file>
+          <file> 55</file>
         </tool>
         <tool>
           <name>ICC430</name>
@@ -149,7 +151,7 @@
       <outputs>
         <tool>
           <name>BICOMP</name>
-          <file> 55</file>
+          <file> 53</file>
         </tool>
         <tool>
           <name>ICC430</name>
@@ -182,11 +184,11 @@
       <inputs>
         <tool>
           <name>BICOMP</name>
-          <file> 33 46 28 26 36 0 24 47 34 45 52 20 18 10 8 22 16 5 14 4</file>
+          <file> 33 46 28 26 36 0 24 47 34 45 51 20 18 10 8 22 16 5 14 4 57</file>
         </tool>
         <tool>
           <name>ICC430</name>
-          <file> 33 46 28 26 36 0 24 42 47 34 45 52 20 18 10 8 22 16 5 14 4</file>
+          <file> 33 46 28 26 36 0 24 42 47 34 45 51 20 18 10 8 22 16 5 14 4 57</file>
         </tool>
       </inputs>
     </file>
@@ -293,7 +295,7 @@
       <inputs>
         <tool>
           <name>XLINK</name>
-          <file> 49 50 25 1 53 40 35 38 30 27 37 41</file>
+          <file> 49 50 25 1 52 58 40 35 38 30 27 37 41</file>
         </tool>
       </inputs>
     </file>
@@ -302,7 +304,30 @@
       <inputs>
         <tool>
           <name>BILINK</name>
-          <file> 57 55 56 58 43 39 48 29 31</file>
+          <file> 55 53 54 59 56 43 39 48 29 31</file>
+        </tool>
+      </inputs>
+    </file>
+    <file>
+      <name>$PROJ_DIR$\buttonbuffer.c</name>
+      <outputs>
+        <tool>
+          <name>BICOMP</name>
+          <file> 59</file>
+        </tool>
+        <tool>
+          <name>ICC430</name>
+          <file> 58</file>
+        </tool>
+      </outputs>
+      <inputs>
+        <tool>
+          <name>BICOMP</name>
+          <file> 57 26 36 0 24 47 34 45 51</file>
+        </tool>
+        <tool>
+          <name>ICC430</name>
+          <file> 57 26 36 0 24 42 47 34 45 51</file>
         </tool>
       </inputs>
     </file>

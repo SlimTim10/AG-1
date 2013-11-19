@@ -15,7 +15,6 @@
 /* Enter Low Power Mode														  */
 /*----------------------------------------------------------------------------*/
 void enter_LPM(void) {
-	__enable_interrupt();		// Ensure that interrupts are enabled
 	PMMCTL0_H = PMMPW_H;		// Open PMM (Power Management Module)
 	PMMCTL0_L |= PMMREGOFF;		// Set flag to enter LPM4.5 with LPM4 request
 	//LPM4;						// Now enter LPM4.5
@@ -32,7 +31,6 @@ void exit_LPM(void) {
 	PM5CTL0 &= ~LOCKIO;			// Clear LOCKIO and enable ports
 	PMMCTL0_H = 0x00;			// Close PMM
 	P1IFG = 0x0000;				// Clear all pending interrupt flags
-	__disable_interrupt();		// Disable interrupts for now
 }
 
 /*----------------------------------------------------------------------------*/
@@ -123,6 +121,13 @@ uint8_t rtc_rdy(void) {
 /*----------------------------------------------------------------------------*/
 void enable_interrupts(void) {
 	__enable_interrupt();
+}
+
+/*----------------------------------------------------------------------------*/
+/* Disable interrupts														  */
+/*----------------------------------------------------------------------------*/
+void disable_interrupts(void) {
+	__disable_interrupt();
 }
 
 /*----------------------------------------------------------------------------*/

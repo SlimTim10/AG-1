@@ -44,6 +44,7 @@ uint8_t ctrl_high(void) {
 /*----------------------------------------------------------------------------*/
 /* Configure interrupts for accelerometer and gyroscope connections			  */
 /*----------------------------------------------------------------------------*/
+/* DEP
 void interrupt_config(void) {
 	P1IE = 0;						// Clear enabled interrupts on P1
 	P1IE |= BIT5;					// P1.5 interrupt enabled for accelerometer
@@ -53,6 +54,35 @@ void interrupt_config(void) {
 	P1IE |= BIT1;					// P1.1 interrupt enabled for CTRL button
 	P1IES &= ~BIT1;					// P1.1 edge select: low-to-high transition
 	P1IFG = 0x0000;					// Clear all pending interrupt Flags
+}
+*/
+
+void deactivate_interrupts(void) {
+	/* Reset interrupts on P1 */
+	P1IE = 0;
+	/* Clear all pending interrupt Flags */
+	P1IFG = 0x0000;
+}
+
+void activate_accel_interrupt(void) {
+	/* P1.5 interrupt enabled for accelerometer */
+	P1IE |= BIT5;
+	/* P1.5 edge select: low-to-high transition */
+	P1IES &= ~BIT5;
+}
+
+void activate_gyro_interrupt(void) {
+	/* P1.7 interrupt enabled for gyroscope */
+	P1IE |= BIT7;
+	/* P1.7 edge select: low-to-high transition */
+	P1IES &= ~BIT7;
+}
+
+void activate_ctrl_interrupt(void) {
+	/* P1.1 interrupt enabled for CTRL button */
+	P1IE |= BIT1;
+	/* P1.1 edge select: low-to-high transition */
+	P1IES &= ~BIT1;
 }
 
 /*----------------------------------------------------------------------------*/

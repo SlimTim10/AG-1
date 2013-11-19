@@ -17,7 +17,11 @@
 void mcu_pin_config(void);
 void mcu_xt_pins(void);
 uint8_t ctrl_high(void);
-void interrupt_config(void);
+//void interrupt_config(void); DEP
+void deactivate_interrupts(void);
+void activate_accel_interrupt(void);
+void activate_gyro_interrupt(void);
+void activate_ctrl_interrupt(void);
 void set_int_accel(void);
 void clear_int_accel(void);
 void set_int_gyro(void);

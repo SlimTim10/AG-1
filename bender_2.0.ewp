@@ -1779,6 +1779,12 @@
     <name>$PROJ_DIR$\accelbuffer.h</name>
   </file>
   <file>
+    <name>$PROJ_DIR$\buttonbuffer.c</name>
+  </file>
+  <file>
+    <name>$PROJ_DIR$\buttonbuffer.h</name>
+  </file>
+  <file>
     <name>$PROJ_DIR$\circuit.c</name>
   </file>
   <file>
