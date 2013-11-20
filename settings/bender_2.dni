@@ -27,7 +27,7 @@ NextState1=0
 Break=7
 State Storage=0
 [DebugChecksum]
-Checksum=-109686310
+Checksum=847826321
 [DisAssemblyWindow]
 NumStates=_ 1
 State 1=_ 1
@@ -46,9 +46,9 @@ TriggerName=main
 LimitSize=0
 ByteLimit=50
 [Breakpoints]
-Bp0=_ "STD_CODE" "{$PROJ_DIR$\main.c}.460.2@1" 1 0 0 0 "" 0 ""
-Bp1=_ "STD_CODE" "{$PROJ_DIR$\main.c}.264.2@1" 1 0 0 0 "" 0 ""
-Bp2=_ "STD_CODE" "{$PROJ_DIR$\main.c}.261.3@1" 1 0 0 0 "" 0 ""
+Bp0=_ "STD_CODE" "{$PROJ_DIR$\main.c}.385.2@1" 1 0 0 0 "" 0 ""
+Bp1=_ "STD_CODE" "{$PROJ_DIR$\main.c}.379.2@1" 1 0 0 0 "" 0 ""
+Bp2=_ "STD_CODE" "{$PROJ_DIR$\main.c}.365.2@1" 1 0 0 0 "" 0 ""
 Count=3
 [FET]
 Clock mode=14
@@ -84,6 +84,6 @@ SuppressDialog=0
 Enabled=0
 [DriverProfiling]
 Enabled=0
-Mode=846357860
+Mode=1726742
 Graph=0
 Symbiont=0

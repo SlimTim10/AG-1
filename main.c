@@ -51,7 +51,8 @@ enum { BUTTON_TIME_WINDOW = 1 };
 enum DeviceState {
 	OFF_STATE,
 	IDLE_STATE,
-	LOG_STATE
+	LOG_STATE,
+	FORMAT_STATE
 };
 
 /*
@@ -67,14 +68,19 @@ enum DeviceState {
 void start_watchdog(void);
 void stop_watchdog(void);
 void feed_watchdog(void);
-enum DeviceState init(void);
+void init(void);
+void restart(void);
 enum DeviceState turn_on(void);
 enum DeviceState turn_off(void);
 enum DeviceState start_logging(void);
 enum DeviceState stop_logging(void);
-void off_step(void);
-void idle_step(void);
-void log_step(void);
+enum DeviceState format_card(void);
+enum DeviceState off_step(void);
+enum DeviceState idle_step(void);
+enum DeviceState log_step(void);
+enum DeviceState format_step(void);
+void init_sd_card(void);
+void format_sd_card(void);
 void button_press_event(void);
 void accel_sample_event(void);
 void gyro_sample_event(void);
@@ -114,6 +120,12 @@ enum ButtonPress button_presses[BUTTON_BUFF_SIZE];
 
 /* Whether the user can triple tap */
 bool triple_tap_enabled;
+
+/* Information for SD FAT library */
+struct fatstruct fatinfo;
+
+/* TODO tmp */
+uint8_t *data_sd;
 
 // old
 // Firmware name and version
@@ -171,10 +183,12 @@ void feed_watchdog(void) {
 /* Return int for compiler compatibility */
 int main(void) {
 	/* Initialize upon startup */
-	enum DeviceState device_state = init();
+	init();
+	/* Start in on state since resetting runs the firmware updater which runs this */
+	enum DeviceState device_state = turn_on();
 
 #ifdef DEBUG
-	//device_state = start_logging();
+	device_state = start_logging();
 #endif
 	
 	/* Application loop */
@@ -182,23 +196,23 @@ int main(void) {
 		feed_watchdog();
 		switch(device_state) {
 			case OFF_STATE:
-				off_step();
+				device_state = off_step();
 				break;
 			case IDLE_STATE:
-				idle_step();
+				device_state = idle_step();
 				break;
 			case LOG_STATE:
-				log_step();
+				device_state = log_step();
+				break;
+			case FORMAT_STATE:
+				device_state = format_step();
 				break;
 		}
-#ifdef DEBUG
-		break;
-#endif
 	}
 	return 0;
 }
 
-enum DeviceState init(void) {
+void init(void) {
 	/* Construct data buffers */
 	construct_accel_sample_buffer(&accel_sample_buffer, accel_samples, RAW_SAMPLE_BUFF_SIZE);
 	construct_button_press_buffer(&button_press_buffer, button_presses, BUTTON_BUFF_SIZE);
@@ -210,7 +224,17 @@ enum DeviceState init(void) {
 	mcu_pin_config();
 	/* Set up ADC */
 	/* adc_config(); TODO unnecessary? */
-	return turn_off();
+	/* Set up SPI for MCU */
+	spi_config();
+	/* Start the watchdog */
+	start_watchdog();
+	/* Initialize the SD card */
+	init_sd_card();
+}
+
+void restart(void) {
+	/* Trigger a brownout reset */
+	brownout_reset();
 }
 
 enum DeviceState turn_on(void) {
@@ -219,6 +243,7 @@ enum DeviceState turn_on(void) {
 	triple_tap_enabled = false;
 	/* Clear button press buffer */
 	clear_button_press_buffer(&button_press_buffer);
+	enable_interrupts();
 	return IDLE_STATE;
 }
 
@@ -231,10 +256,6 @@ enum DeviceState turn_off(void) {
 	/* Clear button press buffer */
 	clear_button_press_buffer(&button_press_buffer);
 	enable_interrupts();
-	/* Wait for control button interrupt */
-	enter_LPM();
-	/* Control button interrupt happened, so continue */
-	exit_LPM();
 	return OFF_STATE;
 }
 
@@ -244,7 +265,6 @@ enum DeviceState start_logging(void) {
 	/* Clear accelerometer samples buffer */
 	clear_accel_sample_buffer(&accel_sample_buffer);
 	// TODO
-	
 	return LOG_STATE;
 }
 
@@ -253,7 +273,21 @@ enum DeviceState stop_logging(void) {
 	return IDLE_STATE;
 }
 
-void off_step(void) {
+enum DeviceState format_card(void) {
+	/* No triple tapping feature in this state */
+	triple_tap_enabled = false;
+	/* Clear button press buffer */
+	clear_button_press_buffer(&button_press_buffer);
+	enable_interrupts();
+	return FORMAT_STATE;
+}
+
+enum DeviceState off_step(void) {
+	/* Wait for button press in low power mode */
+	enter_LPM();
+	/* Button press happened, so continue */
+	exit_LPM();
+	/* Get the button press */
 	enum ButtonPress button_press;
 	bool success = remove_button_press(&button_press_buffer, &button_press);
 #ifdef DEBUG
@@ -261,25 +295,101 @@ void off_step(void) {
 		success = false;
 	}
 #endif
+	/* Change state based on button press */
 	switch(button_press) {
 		case BUTTON_TAP:
-			// TODO
+			/* Do nothing */
 			break;
 		case BUTTON_HOLD:
-			// TODO
+			restart();
 			break;
 		case BUTTON_TRIPLE_TAP:
-			// TODO
+			/* Format the SD card */
+			return format_card();
+	}
+	return OFF_STATE;
+}
+
+enum DeviceState idle_step(void) {
+	// TODO
+	return IDLE_STATE;
+}
+
+enum DeviceState log_step(void) {
+	// TODO
+	return LOG_STATE;
+}
+
+enum DeviceState format_step(void) {
+	/* Turn the LED on as indication that we're waiting for a button press */
+	LED1_ON();
+	/* Wait for button press in low power mode */
+	enter_LPM();
+	/* Button press happened, so continue */
+	exit_LPM();
+	LED1_OFF();
+	/* Get the button press */
+	enum ButtonPress button_press;
+	bool success = remove_button_press(&button_press_buffer, &button_press);
+#ifdef DEBUG
+	if (!success) {
+		success = false;
+	}
+#endif
+	/* Perform action based on button press */
+	switch(button_press) {
+		case BUTTON_TAP:
+			/* TODO restart I think */
+			break;
+		case BUTTON_HOLD:
+			/* TODO format the card */
+			format_sd_card();
 			break;
 	}
+	return FORMAT_STATE;
 }
 
-void idle_step(void) {
-	// TODO
+void init_sd_card(void) {
+	/* Turn on power to SD Card during initialization */
+	power_on(SD_PWR);
+	feed_watchdog();
+	/* Initialize SD card */
+	uint8_t sderr = init_sd();
+	if (sderr != SD_SUCCESS) {
+		/* Turn the LED on and hang to indicate failure */
+		LED1_ON();
+		HANG();
+	}
+	feed_watchdog();
+	/* Find and read the FAT16 boot sector */
+	if (valid_boot_sector(data_sd, &fatinfo) != FAT_SUCCESS) {
+		/* Turn the LED on and hang to indicate failure */
+		LED1_ON();
+		HANG();
+	}
+	feed_watchdog();
+	/* Parse the FAT16 boot sector */
+	if (parse_boot_sector(data_sd, &fatinfo) != FAT_SUCCESS) {
+		/* Flash LED to show "panic" */
+		LED1_PANIC();
+		/* Restart upon failure TODO old code went back to idle state. Any difference? */
+		restart();
+	}
+	/* Turn back off power to SD card since initialization is complete */
+	power_off(SD_PWR);
 }
 
-void log_step(void) {
-	// TODO
+void format_sd_card(void) {
+	/* TODO refactor comments */
+	/* Turn on power to SD Card */
+	power_on(SD_PWR);
+	uint16_t voltage = adc_read();	// Check for low voltage
+	if (voltage < VOLTAGE_THRSHLD) {
+		LED1_LOW_VOLTAGE();	// Signal low voltage with LED1
+		restart();
+	}
+	format_sd(data_sd, &fatinfo);			// Format SD card to FAT16
+	restart();
 }
 
 /*----------------------------------------------------------------------------*/
