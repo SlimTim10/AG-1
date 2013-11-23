@@ -28,7 +28,7 @@
 
 
 /* Size of data buffers */
-/*** 4660 bytes available to use */
+/*** TODO NOTE 4660 bytes available to use ***/
 /* 1.5KB */
 enum { RAW_SAMPLE_BUFF_SIZE = 150 };
 
@@ -55,9 +55,18 @@ enum DeviceState {
 	FORMAT_STATE
 };
 
+/* Accelerometer/Gyroscope settings */
+struct Logger {
+	bool is_enabled;
+	uint8_t range;
+	uint8_t bandwidth;
+};
+
 /*
  * External variables
  */
+struct Logger accelerometer;
+struct Logger gyroscope;
 // extern uint32_t file_cluster_offset;
 // extern uint32_t bytes_per_cluster;
 // extern uint8_t sectors_per_cluster;
@@ -68,6 +77,15 @@ enum DeviceState {
 void start_watchdog(void);
 void stop_watchdog(void);
 void feed_watchdog(void);
+void power_on_sd(void);
+bool voltage_is_low(void);
+
+/* Flash LED multiple times quickly to show "panic" */
+void led_1_panic(void);
+
+/* Flash LED dimly multiple times to signal low voltage */
+void led_1_low_voltage(void);
+
 void init(void);
 void restart(void);
 enum DeviceState turn_on(void);
@@ -81,6 +99,7 @@ enum DeviceState log_step(void);
 enum DeviceState format_step(void);
 void init_sd_card(void);
 void format_sd_card(void);
+void get_config_settings(void);
 void button_press_event(void);
 void accel_sample_event(void);
 void gyro_sample_event(void);
@@ -92,8 +111,6 @@ enum ButtonPress wait_for_button_release(void);
 // old
 void LED1_DOT(void);
 void LED1_DASH(void);
-void LED1_PANIC(void);
-void LED1_LOW_VOLTAGE(void);
 void morse_delay(uint8_t t);
 enum ButtonPress wait_for_ctrl(void);
 
@@ -124,7 +141,8 @@ bool triple_tap_enabled;
 /* Information for SD FAT library */
 struct fatstruct fatinfo;
 
-/* TODO tmp */
+/* TODO tmp? */
+uint8_t data_sd_buff[ASCII_SAMPLE_BUFF_SIZE];
 uint8_t *data_sd;
 
 // old
@@ -180,6 +198,55 @@ void feed_watchdog(void) {
 #endif
 }
 
+void power_on_sd(void) {
+	power_on(SD_PWR);
+	feed_watchdog();
+	/* Initialize SD card */
+	/* 
+	 * TODO may not necessarily need to init after each power-on, but a delay is required
+	 * to complete powering-on which is currently what init is also used for
+	 */
+	uint8_t sderr = init_sd();
+	if (sderr != SD_SUCCESS) {
+		/* Turn the LED on and hang to indicate failure */
+		led_1_on();
+		HANG();
+	}
+}
+
+bool voltage_is_low(void) {
+	uint16_t voltage = adc_read();
+	if (voltage < VOLTAGE_THRSHLD) {
+		/* Show low voltage with LED 1 */
+		led_1_low_voltage();
+		return true;
+	}
+	return false;
+}
+
+void led_1_panic(void) {
+	led_1_off();
+	for (uint8_t k = 0; k < 20; k++) {
+		led_1_toggle();
+		for (uint8_t j = 0; j < CLOCK_SPEED; j++) {
+			for (uint16_t i = 0; i < 8000; i++);
+		}
+	}
+}
+
+void led_1_low_voltage(void) {
+	for (uint8_t i = 0; i < 20; i++) {
+		if (i % 2 == 0) {
+			led_1_on();
+			for (uint32_t j = 0; j < 0x800; j++) _NOP();
+		} else {
+			led_1_off();
+			for (uint32_t j = 0; j < 0x20000; j++) _NOP();
+		}
+	}
+	led_1_off();
+}
+
 /* Return int for compiler compatibility */
 int main(void) {
 	/* Initialize upon startup */
@@ -216,6 +283,8 @@ void init(void) {
 	/* Construct data buffers */
 	construct_accel_sample_buffer(&accel_sample_buffer, accel_samples, RAW_SAMPLE_BUFF_SIZE);
 	construct_button_press_buffer(&button_press_buffer, button_presses, BUTTON_BUFF_SIZE);
+	/* Point pointer to buffer */
+	data_sd = data_sd_buff;
 	/* Watchdog timer is on by default */
 	stop_watchdog();
 	/* Set up and configure the clock */
@@ -223,7 +292,7 @@ void init(void) {
 	/* Configure MCU pins */
 	mcu_pin_config();
 	/* Set up ADC */
-	/* adc_config(); TODO unnecessary? */
+	adc_config();
 	/* Set up SPI for MCU */
 	spi_config();
 	/* Start the watchdog */
@@ -238,7 +307,8 @@ void restart(void) {
 }
 
 enum DeviceState turn_on(void) {
-	// TODO
+	/* Make sure the LED is off */
+	led_1_off();
 	/* We don't want to waste time checking for triple taps in this state */
 	triple_tap_enabled = false;
 	/* Clear button press buffer */
@@ -260,6 +330,14 @@ enum DeviceState turn_off(void) {
 }
 
 enum DeviceState start_logging(void) {
+	power_on_sd();
+	/*  
+	 * We parse the config file each time we want to start logging so the user doesn't
+	 * have to restart the device manually each time they modify the config settings.
+	 * NOTE if this ever proves too slow or too power hungry, we can do this in device
+	 * turn on state.
+	 */
+	get_config_settings();
 	/* Reset timer */
 	time_cont = 0;
 	/* Clear accelerometer samples buffer */
@@ -322,12 +400,12 @@ enum DeviceState log_step(void) {
 
 enum DeviceState format_step(void) {
 	/* Turn the LED on as indication that we're waiting for a button press */
-	LED1_ON();
+	led_1_on();
 	/* Wait for button press in low power mode */
 	enter_LPM();
 	/* Button press happened, so continue */
 	exit_LPM();
-	LED1_OFF();
+	led_1_off();
 	/* Get the button press */
 	enum ButtonPress button_press;
 	bool success = remove_button_press(&button_press_buffer, &button_press);
@@ -351,27 +429,19 @@ enum DeviceState format_step(void) {
 
 void init_sd_card(void) {
 	/* Turn on power to SD Card during initialization */
-	power_on(SD_PWR);
-	feed_watchdog();
-	/* Initialize SD card */
-	uint8_t sderr = init_sd();
-	if (sderr != SD_SUCCESS) {
-		/* Turn the LED on and hang to indicate failure */
-		LED1_ON();
-		HANG();
-	}
+	power_on_sd();
 	feed_watchdog();
 	/* Find and read the FAT16 boot sector */
 	if (valid_boot_sector(data_sd, &fatinfo) != FAT_SUCCESS) {
 		/* Turn the LED on and hang to indicate failure */
-		LED1_ON();
+		led_1_on();
 		HANG();
 	}
 	feed_watchdog();
 	/* Parse the FAT16 boot sector */
 	if (parse_boot_sector(data_sd, &fatinfo) != FAT_SUCCESS) {
-		/* Flash LED to show "panic" */
-		LED1_PANIC();
+		/* Show failure with LED 1  */
+		led_1_panic();
 		/* Restart upon failure TODO old code went back to idle state. Any difference? */
 		restart();
 	}
@@ -380,16 +450,71 @@ void init_sd_card(void) {
 }
 
 void format_sd_card(void) {
-	/* TODO refactor comments */
 	/* Turn on power to SD Card */
-	power_on(SD_PWR);
-	uint16_t voltage = adc_read();	// Check for low voltage
-	if (voltage < VOLTAGE_THRSHLD) {
-		LED1_LOW_VOLTAGE();	// Signal low voltage with LED1
+	power_on_sd();
+	/* Check for low voltage */
+	if (voltage_is_low()) {
 		restart();
 	}
-	format_sd(data_sd, &fatinfo);			// Format SD card to FAT16
+	/* Format the SD card, using LED 1 to indicate it's being formatted */
+	format_sd(data_sd, &fatinfo, led_1_on, led_1_toggle, led_1_off);
 	restart();
+}
+
+void set_disabled_accel(uint16_t disabled) {
+	if (disabled == 1) {
+		accelerometer.is_enabled = false;
+	} else {
+		accelerometer.is_enabled = true;
+	}
+}
+
+void set_range_accel(uint16_t range) {
+	accelerometer.range = range_bits_accel(range);
+}
+
+void set_bandwidth_accel(uint16_t bandwidth) {
+	accelerometer.bandwidth = bandwidth_bits_accel(bandwidth);
+}
+
+void set_disabled_gyro(uint16_t disabled) {
+	if (disabled == 1) {
+		gyroscope.is_enabled = false;
+	}	else {
+		gyroscope.is_enabled = true;
+	}
+}
+
+void set_range_gyro(uint16_t range) {
+	gyroscope.range = range_bits_gyro(range);
+}
+
+void set_bandwidth_gyro(uint16_t bandwidth) {
+	gyroscope.bandwidth = bandwidth_bits_gyro(bandwidth);
+}
+
+void get_config_settings(void) {
+	/* Set default settings */
+	accelerometer.is_enabled = true;
+	accelerometer.range = DEFAULT_RANGE_ACCEL;
+	accelerometer.bandwidth = DEFAULT_BANDWIDTH_ACCEL;
+	gyroscope.is_enabled = true;
+	gyroscope.range = DEFAULT_RANGE_GYRO;
+	gyroscope.range = DEFAULT_BANDWIDTH_GYRO;
+	/* Override defaults with settings from config file */
+	struct Setting key_value_settings[4] = {
+		{ .key = (uint8_t *)"ar", .set_value = set_range_accel },
+		{ .key = (uint8_t *)"as", .set_value = set_bandwidth_accel },
+		{ .key = (uint8_t *)"gr", .set_value = set_range_gyro },
+		{ .key = (uint8_t *)"gs", .set_value = set_bandwidth_gyro }
+	};
+	struct Setting key_only_settings[2] = {
+		{ .key = (uint8_t *)"disable_accel", .set_value = set_disabled_accel },
+		{ .key = (uint8_t *)"disable_gyro", .set_value = set_disabled_gyro }
+	};
+	set_key_value_settings(key_value_settings, 4);
+	set_key_only_settings(key_only_settings, 2);
+	get_user_config(data_sd, &fatinfo);
 }
 
 /*----------------------------------------------------------------------------*/
@@ -398,11 +523,11 @@ void format_sd_card(void) {
 void LED1_DOT(void) {
 	uint16_t i;
 	uint8_t j;
-	LED1_ON();
+	led_1_on();
 	for (j = 0; j < CLOCK_SPEED; j++) {
 		for (i = 0; i < 10000; i++);
 	}
-	LED1_OFF();
+	led_1_off();
 }
 
 /*----------------------------------------------------------------------------*/
@@ -411,44 +536,11 @@ void LED1_DOT(void) {
 void LED1_DASH(void) {
 	uint16_t i;
 	uint8_t j;
-	LED1_ON();
+	led_1_on();
 	for (j = 0; j < CLOCK_SPEED; j++) {
 		for (i = 0; i < 60000; i++);
 	}
-	LED1_OFF();
-}
-
-/*----------------------------------------------------------------------------*/
-/* Flash LED multiple times quickly to show "panic"							  */
-/*----------------------------------------------------------------------------*/
-void LED1_PANIC(void) {
-	uint16_t i;
-	uint8_t j, k;
-	LED1_OFF();
-	for (k = 0; k < 20; k++) {
-		LED1_TOGGLE();
-		for (j = 0; j < CLOCK_SPEED; j++) {
-			for (i = 0; i < 8000; i++);
-		}
-	}
-}
-
-/*----------------------------------------------------------------------------*/
-/* Flash LED dimly multiple times to signal low voltage						  */
-/*----------------------------------------------------------------------------*/
-void LED1_LOW_VOLTAGE(void) {
-	uint8_t i;
-	uint32_t j;
-	for (i = 0; i < 20; i++) {
-		if (i % 2 == 0) {
-			LED1_ON();
-			for (j = 0; j < 0x800; j++) _NOP();
-		} else {
-			LED1_OFF();
-			for (j = 0; j < 0x20000; j++) _NOP();
-		}
-	}
-	LED1_OFF();
+	led_1_off();
 }
 
 /*----------------------------------------------------------------------------*/
@@ -457,7 +549,7 @@ void LED1_LOW_VOLTAGE(void) {
 void morse_delay(uint8_t t) {
 	uint16_t i;
 	uint8_t j, k;
-	LED1_OFF();
+	led_1_off();
 	for (j = 0; j < CLOCK_SPEED; j++) {
 		for (k = 0; k < t; k++) {
 			for (i = 0; i < 30000; i++);
@@ -505,7 +597,7 @@ enum ButtonPress wait_for_ctrl(void) {
 /* Turn off on button hold */
 	if (sec >= 2) {
 /* Turn on LED for 1 second to signal system turning off */
-		LED1_ON();
+		led_1_on();
 		rtc_restart();
 		while (RTCSEC < 1) {
 			feed_watchdog();

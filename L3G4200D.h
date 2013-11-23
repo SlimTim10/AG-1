@@ -16,12 +16,16 @@
 #define GYRO_OUTY_H		0x2B				// Y axis gyroscope data MSB
 #define GYRO_OUTZ_L		0x2C				// Z axis gyroscope data LSB
 #define GYRO_OUTZ_H		0x2D				// Z axis gyroscope data MSB
+#define DEFAULT_RANGE_GYRO			1	// Default range value (01: 500 dps)
+#define DEFAULT_BANDWIDTH_GYRO		0	// Default bandwidth value (00: 100 Hz)
 
-uint8_t init_gyro(void);
+uint8_t init_gyro(uint8_t range_gyro, uint8_t bandwidth_gyro);
 uint8_t gyro_not_avail(void);
 void power_down_gyro(void);
 uint8_t read_addr_gyro(uint8_t address);
 void write_addr_gyro(uint8_t address, uint8_t d);
 uint8_t gyro_int(void);
+uint8_t range_bits_gyro(uint16_t n);
+uint8_t bandwidth_bits_gyro(uint16_t n);
 
 #endif

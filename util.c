@@ -41,12 +41,10 @@ enum MaxFileSize {
 	MAX_FILE_SIZE_ENUM = 0x8000
 };
 
-extern uint8_t sectors_per_cluster;
-extern uint32_t bytes_per_cluster;
-extern uint32_t dir_table_offset;
-extern uint32_t dir_table_size;
-extern uint32_t file_cluster_offset;
-extern uint32_t boot_offset;
+struct Setting *key_value_settings;
+uint8_t num_key_value_settings;
+struct Setting *key_only_settings;
+uint8_t num_key_only_settings;
 
 /* Boolean type */
 typedef enum { FALSE, TRUE } Bool;
@@ -93,42 +91,6 @@ struct substring {
 	/* Number of chars */
 	uint8_t length;
 };
-
-/*
- * Return accelerometer range bits corresponding to range n
- * LIS3LV02DL Accelerometer
- */
-uint8_t range_bits_accel(uint16_t n);
-
-/*
- * Return accelerometer range Gs ASCII value corresponding to range bits n
- * LIS3LV02DL Accelerometer
- */
-uint8_t range_ascii_accel(uint8_t n);
-
-/*
- * Return accelerometer bandwidth bits corresponding to bandwidth n
- * LIS3LV02DL Accelerometer
- */
-uint8_t bandwidth_bits_accel(uint16_t n);
-
-/*
- * Return gyroscope range bits corresponding to range n
- * L3G4200D Gyroscope
- */
-uint8_t range_bits_gyro(uint16_t n);
-
-/*
- * Return gyroscope range DPS ASCII value corresponding to range bits n
- * L3G4200D Gyroscope
- */
-uint16_t range_ascii_gyro(uint8_t n);
-
-/*
- * Return gyroscope bandwidth bits corresponding to bandwidth n
- * L3G4200D Gyroscope
- */
-uint8_t bandwidth_bits_gyro(uint16_t n);
 
 /*
  * Convert a substring to a 16 bit unsigned integer
@@ -200,35 +162,52 @@ void store_key(struct substring *key, uint8_t line_length);
  */
 void store_value(struct substring *value, uint8_t line_length);
 
-/* TODO refactor for general use */
-void set_key_value_pair_globals(struct substring *key, struct substring *value);
+/*
+ * Set the key-value pair settings determined by the array of custom defined structs
+ *
+ * key: Substring of line for the key
+ *
+ * value: Substring of line for the value
+ */
+void set_value_for_key_value_settings(struct substring *key, struct substring *value);
 
-/* TODO refactor for general use */
-void set_key_only_globals(struct substring *key);
+/*
+ * Set the key only settings determined by the array of custom defined structs
+ *
+ * key: Substring of line for the key
+ *
+ * value: Substring of line for the value
+ */
+void set_value_for_key_only_settings(struct substring *key);
+
+void set_key_value_settings(struct Setting *_key_value_settings, uint8_t _num_key_value_settings) {
+	key_value_settings = _key_value_settings;
+	num_key_value_settings = _num_key_value_settings;
+}
+
+void set_key_only_settings(struct Setting *_key_only_settings, uint8_t _num_key_only_settings) {
+	key_only_settings = _key_only_settings;
+	num_key_only_settings = _num_key_only_settings;
+}
 
 void get_user_config(uint8_t *data, struct fatstruct *info) {
 	uint32_t i, j, k;
 	uint32_t config_file_offset = 0; // Offset of first block with file's data
-
-	range_accel = DEFAULT_RANGE_ACCEL;
-	bandwidth_accel = DEFAULT_BANDWIDTH_ACCEL;
-	range_gyro = DEFAULT_RANGE_GYRO;
-	bandwidth_gyro = DEFAULT_BANDWIDTH_GYRO;
 	
 	/* Read first block of directory table */
 	read_block(data, info->dtoffset);
 
-/* Find config.ini file in directory table */
+	/* Find config.ini file in directory table */
 	for (	i = 0;
-			i < dir_table_size &&
+			i < info->dtsize &&
 			config_file_offset == 0 &&
 			data[0] != 0x00;
 			i += 512) {
 		read_block(data, info->dtoffset + i);
 		for (j = 0; j < 512; j += 32) {
-// Deleted file
+			/* Deleted file */
 			if (data[j] == 0xE5) continue;
-// End of directory table entries
+			/* End of directory table entries */
 			if (data[j] == 0x00) break;
 
 			k = j;
@@ -238,21 +217,19 @@ void get_user_config(uint8_t *data, struct fatstruct *info) {
 			if (data[k] == ' ') { k++; if (data[k] == ' ') { k++;
 			if (data[k] == 'I') { k++; if (data[k] == 'N') { k++;
 			if (data[k] == 'I') {
-			// config.ini entry found. Store starting cluster
-				config_file_offset = file_cluster_offset +
+				/* config.ini entry found. Store starting cluster */
+				config_file_offset = info->fileclustoffset +
 									 (((uint8_t)(data[j+27] << 8) +
 									 (uint8_t)(data[j+26]) - 2) *
-									 bytes_per_cluster);
+									 info->nbytesinclust);
 				break;
 			}}}}}}}}}}}
 		}
 	}
 
-// If the config file was found
+	/* If the config file was found */
 	if (config_file_offset > 0) {
-		//config_file_offset += boot_offset;
-	
-	// Get values from config file and set variables
+		/* Get values from config file and set variables */
 		get_config_values(data, config_file_offset);
 	}
 }
@@ -392,7 +369,7 @@ void parse_key_value_pair(uint8_t line[], uint8_t line_length) {
 	store_value(&value, line_length);
 	
 	/* Set global vars */
-	set_key_value_pair_globals(&key, &value);
+	set_value_for_key_value_settings(&key, &value);
 }
 
 void parse_key_only(uint8_t line[], uint8_t line_length) {
@@ -412,7 +389,7 @@ void parse_key_only(uint8_t line[], uint8_t line_length) {
 	}
 	
 	/* Set global vars */
-	set_key_only_globals(&key);
+	set_value_for_key_only_settings(&key);
 }
 
 void store_key(struct substring *key, uint8_t line_length) {
@@ -454,97 +431,21 @@ void store_value(struct substring *value, uint8_t line_length) {
 	value->length = i-j;
 }
 
-void set_key_value_pair_globals(struct substring *key, struct substring *value) {
-	/* Accelerometer range (e.g., ar=2) */
-	if (same((uint8_t *)"ar", key) == TRUE) {
-		range_accel = range_bits_accel(substring_to_uint16_t(value));
-	} else if (same((uint8_t *)"as", key) == TRUE) {
-		/* Accelerometer sample rate (e.g., as=40) */
-		bandwidth_accel = bandwidth_bits_accel(substring_to_uint16_t(value));
-	} else if (same((uint8_t *)"gr", key) == TRUE) {
-		/* Gyroscope range (e.g., gr=2000) */
-		range_gyro = range_bits_gyro(substring_to_uint16_t(value));
-	} else if (same((uint8_t *)"gs", key) == TRUE) {
-		/* Gyroscope sample rate (e.g., gs=100) */
-		bandwidth_gyro = bandwidth_bits_gyro(substring_to_uint16_t(value));
+void set_value_for_key_value_settings(struct substring *key, struct substring *value) {
+	for (uint8_t i = 0; i < num_key_value_settings; ++i) {
+		struct Setting *key_value_setting = &key_value_settings[i];
+		if (same(key_value_setting->key, key) == TRUE) {
+			key_value_setting->set_value(substring_to_uint16_t(value));
+		}
 	}
 }
 
-void set_key_only_globals(struct substring *key) {
-	/* Accelerometer is disabled */
-	if (same((uint8_t *)"disable_accel", key) == TRUE) {
-		logger_status.accel_enabled = 0;
-	} else if (same((uint8_t *)"disable_gyro", key) == TRUE) {
-		/* Gyroscope is disabled */
-		logger_status.gyro_enabled = 0;
-	}
-}
-
-uint8_t range_bits_accel(uint16_t n) {
-	if (n == 2) {
-		return 0;			// 0: +/-2 g
-	} else if (n == 6) {
-		return 1;			// 1: +/-6 g
-	} else {
-		return DEFAULT_RANGE_ACCEL;
-	}
-}
-
-uint8_t range_ascii_accel(uint8_t n) {
-	if (n == 0) {
-		return 2;
-	} else {
-		return 6;
-	}
-}
-
-uint8_t bandwidth_bits_accel(uint16_t n) {
-	if (n == 40) {
-		return 0;				// 00: 40 Hz
-	} else if (n == 160) {
-		return 1;				// 01: 160 Hz
-	} else if (n == 640) {
-		return 2;				// 10: 640 Hz
-	} else if (n == 2560) {
-		return 3;				// 11: 2560 Hz
-	} else {
-		return DEFAULT_BANDWIDTH_ACCEL;
-	}
-}
-
-uint8_t range_bits_gyro(uint16_t n) {
-	if (n == 250) {
-		return 0;			// 0: 250 dps
-	} else if (n == 500) {
-		return 1;			// 1: 500 dps
-	} else if (n == 2000) {
-		return 2;			// 2: 2000 dps
-	} else {
-		return DEFAULT_RANGE_GYRO;
-	}
-}
-
-uint16_t range_ascii_gyro(uint8_t n) {
-	if (n == 0) {
-		return 250;
-	} else if (n == 1) {
-		return 500;
-	} else {
-		return 2000;
-	}
-}
-
-uint8_t bandwidth_bits_gyro(uint16_t n) {
-	if (n == 100) {
-		return 0;				// 00: 100 Hz
-	} else if (n == 200) {
-		return 1;				// 01: 200 Hz
-	} else if (n == 400) {
-		return 2;				// 10: 400 Hz
-	} else if (n == 800) {
-		return 3;				// 11: 800 Hz
-	} else {
-		return DEFAULT_BANDWIDTH_GYRO;
+void set_value_for_key_only_settings(struct substring *key) {
+	for (uint8_t i = 0; i < num_key_only_settings; ++i) {
+		struct Setting *key_only_setting = &key_only_settings[i];
+		if (same(key_only_setting->key, key) == TRUE) {
+			key_only_setting->set_value(1);
+		}
 	}
 }
 

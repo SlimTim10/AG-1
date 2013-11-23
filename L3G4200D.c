@@ -15,13 +15,10 @@
 #include "spi.h"
 #include "L3G4200D.h"
 
-// Configuration values determined by config.ini file
-extern uint8_t range_gyro, bandwidth_gyro;
-
 /*----------------------------------------------------------------------------*/
 /* Initialize gyroscope														  */
 /*----------------------------------------------------------------------------*/
-uint8_t init_gyro(void) {
+uint8_t init_gyro(uint8_t range_gyro, uint8_t bandwidth_gyro) {
 	uint8_t tmp8;
 
 /* Read WHO_AM_I (0x0F) (page 29)
@@ -125,6 +122,38 @@ void write_addr_gyro(uint8_t address, uint8_t d) {
 /*----------------------------------------------------------------------------*/
 uint8_t gyro_int(void) {
 	 return (P1IN & BIT7) != 0;
+}
+
+/*----------------------------------------------------------------------------*/
+/* Return gyroscope range bits corresponding to range n						  */
+/*----------------------------------------------------------------------------*/
+uint8_t range_bits_gyro(uint16_t n) {
+	if (n == 250) {
+		return 0;			// 0: 250 dps
+	} else if (n == 500) {
+		return 1;			// 1: 500 dps
+	} else if (n == 2000) {
+		return 2;			// 2: 2000 dps
+	} else {
+		return DEFAULT_RANGE_GYRO;
+	}
+}
+
+/*----------------------------------------------------------------------------*/
+/* Return gyroscope bandwidth bits corresponding to bandwidth n				  */
+/*----------------------------------------------------------------------------*/
+uint8_t bandwidth_bits_gyro(uint16_t n) {
+	if (n == 100) {
+		return 0;				// 00: 100 Hz
+	} else if (n == 200) {
+		return 1;				// 01: 200 Hz
+	} else if (n == 400) {
+		return 2;				// 10: 400 Hz
+	} else if (n == 800) {
+		return 3;				// 11: 800 Hz
+	} else {
+		return DEFAULT_BANDWIDTH_GYRO;
+	}
 }
 
 #endif

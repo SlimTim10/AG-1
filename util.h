@@ -5,10 +5,24 @@
 #ifndef _UTILLIB_H
 #define _UTILLIB_H
 
-#define DEFAULT_RANGE_ACCEL			0	// Default range value (0: +/-2 g)
-#define DEFAULT_BANDWIDTH_ACCEL		0	// Default bandwidth value (00: 40 Hz)
-#define DEFAULT_RANGE_GYRO			1	// Default range value (01: 500 dps)
-#define DEFAULT_BANDWIDTH_GYRO		0	// Default bandwidth value (00: 100 Hz)
+/*
+ * Determines the key to look for in parsing the config file and the appropriate means
+ * of setting the key's value
+ */
+struct Setting {
+	uint8_t *key;
+	void (*set_value)(uint16_t);
+};
+
+/*
+ * Set an array of custom defined structs for key-value pair settings
+ */
+void set_key_value_settings(struct Setting *_key_value_settings, uint8_t _num_key_value_settings);
+
+/*
+ * Set an array of custom defined structs for the key only settings
+ */
+void set_key_only_settings(struct Setting *_key_only_settings, uint8_t _num_key_only_settings);
 
 /*
  * Find and parse config.ini file and set configuration values (range,

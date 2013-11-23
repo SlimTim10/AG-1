@@ -90,7 +90,7 @@ uint8_t init_sd(void) {
 		ocr[n] = spia_rec();
 	}
 	/* SD 2.0 (HC or not) */
-	/*** I don't get the point of this since this will always return SD_SUCCESS? */
+	/* TODO I don't get the point of this since this will always return SD_SUCCESS? */
 	enum SDCardType ct = (ocr[0] & BIT6) ? CT_SDHC : CT_SD2;
 
 	SD_DESELECT();
@@ -416,7 +416,7 @@ uint8_t update_fat(uint8_t *data, struct fatstruct *info, uint16_t index, uint16
  * file_size: total bytes in file
  * file_num: file name number suffix
  */
-/*** Contains project specific code, i.e., dte */
+/* TODO Contains project specific code, i.e., dte */
 uint8_t update_dir_table(uint8_t *data, struct fatstruct *info, uint16_t cluster, uint32_t file_size) {
 
 	uint8_t err;
@@ -647,11 +647,18 @@ void delete_file(	uint8_t dten, uint32_t curoffset, uint8_t *data, struct fatstr
  * number of sectors per FAT:	235
  * total sectors:				3842048
  */
-void format_sd(uint8_t *data, struct fatstruct *info) {
+void format_sd(uint8_t *data, struct fatstruct *info, void (*pre_format)(), void (*during_format)(), void (*post_format)()) {
 	/* Clear block 0 up to directory table */
 	for (uint32_t j = 0; j < info->dtoffset; j += 512) {
 		write_block(data, j, 0);
+		/* Indicate that format is happening */
+		if (j % 2048 == 0) {
+			during_format();
+		}
 	}
+	
+	/* Indicate that format is about to start */
+	pre_format();
 
 	/* Initialize bytes for boot sector */
 	/* (temporary variable for clean initialization) */
@@ -767,7 +774,14 @@ void format_sd(uint8_t *data, struct fatstruct *info) {
 			/* Clear this block */
 			write_block(data, j, 0);
 		}
+		/* Indicate that format is happening */
+		if (j % 2048 == 0) {
+			during_format();
+		}
 	}
+	
+	/* Indicate that format has completed */
+	post_format();
 }
 
 uint16_t get_file_num(uint8_t *data, struct fatstruct *info) {
@@ -778,7 +792,7 @@ uint16_t get_file_num(uint8_t *data, struct fatstruct *info) {
 	/* Directory table entry address */
 	uint32_t j = 0;
 	
-	/*** TODO */
+	/* TODO */
 	do {
 		/* Check for end of sector */
 		if (i % info->nbytesinsect == 0) {

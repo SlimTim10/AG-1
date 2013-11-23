@@ -15,13 +15,10 @@
 #include "spi.h"
 #include "LIS3LV02DL.h"
 
-// Configuration values determined by config.ini file
-extern uint8_t range_accel, bandwidth_accel;
-
 /*----------------------------------------------------------------------------*/
 /* Initialize accelerometer													  */
 /*----------------------------------------------------------------------------*/
-uint8_t init_accel(void) {
+uint8_t init_accel(uint8_t range_accel, uint8_t bandwidth_accel) {
 	uint8_t tmp8;
 	
 /* Read WHO_AM_I (0x0F) (page 30)
@@ -106,6 +103,40 @@ void write_addr_accel(uint8_t address, uint8_t d) {
 /*----------------------------------------------------------------------------*/
 uint8_t accel_int(void) {
 	return (P1IN & BIT5) != 0;
+}
+
+/*
+ * Return accelerometer range bits corresponding to range n
+ * LIS3LV02DL Accelerometer
+ */
+/*----------------------------------------------------------------------------*/
+/* Return accelerometer range bits corresponding to range n					  */
+/*----------------------------------------------------------------------------*/
+uint8_t range_bits_accel(uint16_t n) {
+	if (n == 2) {
+		return 0;			// 0: +/-2 g
+	} else if (n == 6) {
+		return 1;			// 1: +/-6 g
+	} else {
+		return DEFAULT_RANGE_ACCEL;
+	}
+}
+
+/*----------------------------------------------------------------------------*/
+/* Return accelerometer bandwidth bits corresponding to bandwidth n			  */
+/*----------------------------------------------------------------------------*/
+uint8_t bandwidth_bits_accel(uint16_t n) {
+	if (n == 40) {
+		return 0;				// 00: 40 Hz
+	} else if (n == 160) {
+		return 1;				// 01: 160 Hz
+	} else if (n == 640) {
+		return 2;				// 10: 640 Hz
+	} else if (n == 2560) {
+		return 3;				// 11: 2560 Hz
+	} else {
+		return DEFAULT_BANDWIDTH_ACCEL;
+	}
 }
 
 #endif
