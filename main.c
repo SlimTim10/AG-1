@@ -23,8 +23,14 @@
 #define CTRL_TAP		0		// Button tap (shorter than hold)
 #define CTRL_HOLD		1		// Button hold
 
-// Infinite loop
+/* Infinite loop */
 #define HANG()			for (;;);
+
+/* Small delay */
+#define POWER_ON_DELAY() \
+	for (uint8_t j = 0; j < CLOCK_SPEED; j++) { \
+		for (uint16_t i = 0; i < 1000; i++); \
+	}
 
 
 /* Size of data buffers */
@@ -32,8 +38,8 @@
 /* 1.5KB */
 enum { RAW_SAMPLE_BUFF_SIZE = 150 };
 
-/* 512B */
-enum { ASCII_SAMPLE_BUFF_SIZE = 512 };
+/* Should be same size as SD card write block, so 512B */
+enum { SD_SAMPLE_BUFF_SIZE = 512 };
 
 /* 1B */
 enum { BUTTON_BUFF_SIZE = 1 };
@@ -55,21 +61,18 @@ enum DeviceState {
 	FORMAT_STATE
 };
 
-/* Accelerometer/Gyroscope settings */
+/* Data logger settings */
 struct Logger {
 	bool is_enabled;
 	uint8_t range;
 	uint8_t bandwidth;
 };
 
-/*
- * External variables
- */
-struct Logger accelerometer;
-struct Logger gyroscope;
-// extern uint32_t file_cluster_offset;
-// extern uint32_t bytes_per_cluster;
-// extern uint8_t sectors_per_cluster;
+/* Buffer of data to write to SD card */
+struct SdCardBuffer {
+	uint8_t buffer[SD_SAMPLE_BUFF_SIZE];
+	uint16_t index;
+};
 
 /*
  * Function prototypes
@@ -78,6 +81,16 @@ void start_watchdog(void);
 void stop_watchdog(void);
 void feed_watchdog(void);
 void power_on_sd(void);
+void power_off_sd(void);
+void power_on_accelerometer(void);
+void power_off_accelerometer(void);
+void power_on_gyroscope(void);
+void power_off_gyroscope(void);
+void enable_button_pressing(bool enable_triple_tap);
+void enable_accelerometer_sampling(void);
+void enable_gyroscope_sampling(void);
+void accelerometer_empty_read(void);
+void gyroscope_empty_read(void);
 bool voltage_is_low(void);
 
 /* Flash LED multiple times quickly to show "panic" */
@@ -141,9 +154,20 @@ bool triple_tap_enabled;
 /* Information for SD FAT library */
 struct fatstruct fatinfo;
 
-/* TODO tmp? */
-uint8_t data_sd_buff[ASCII_SAMPLE_BUFF_SIZE];
+/* Buffer for accelerometer sample data to write to SD card */
+struct SdCardBuffer accel_sd_buff;
+
+/* Buffer for gyroscope sample data to write to SD card */
+struct SdCardBuffer gyro_sd_buff;
+
+/* Temporary variable for initializing the SD card using an SdCardBuffer's buffer */
 uint8_t *data_sd;
+
+/* Accelerometer settings */
+struct Logger accelerometer;
+
+/* Gyroscope settings */
+struct Logger gyroscope;
 
 // old
 // Firmware name and version
@@ -199,19 +223,99 @@ void feed_watchdog(void) {
 }
 
 void power_on_sd(void) {
-	power_on(SD_PWR);
 	feed_watchdog();
+	power_on(SD_PWR);
+	/* Needs a delay to complete powering-on */
+	POWER_ON_DELAY();
 	/* Initialize SD card */
-	/* 
-	 * TODO may not necessarily need to init after each power-on, but a delay is required
-	 * to complete powering-on which is currently what init is also used for
-	 */
-	uint8_t sderr = init_sd();
-	if (sderr != SD_SUCCESS) {
+	/* TODO may not necessarily need to init after each power-on */
+	if (init_sd() != SD_SUCCESS) {
 		/* Turn the LED on and hang to indicate failure */
 		led_1_on();
 		HANG();
 	}
+}
+
+void power_off_sd(void) {
+	power_off(SD_PWR);
+}
+
+void power_on_accelerometer(void) {
+	feed_watchdog();
+	power_on(ACCEL_PWR);
+	/* Needs a delay to complete powering-on */
+	POWER_ON_DELAY();
+	/* Initialize accelerometer */
+	/* TODO may not necessarily need to init after each power-on */
+	if (!init_accel(accelerometer.range, accelerometer.bandwidth)) {
+		/* Turn the LED on and hang to indicate failure */
+		led_1_on();
+		HANG();
+	}
+}
+
+void power_off_accelerometer(void) {
+	/* So accelerometer interrupt is low */
+	accelerometer_empty_read();
+	power_down_accel();
+	power_off(ACCEL_PWR);
+}
+
+void power_on_gyroscope(void) {
+	feed_watchdog();
+	power_on(GYRO_PWR);
+	/* Needs a delay to complete powering-on */
+	POWER_ON_DELAY();
+	/* Initialize gyroscope */
+	/* TODO may not necessarily need to init after each power-on */
+	if (!init_gyro(gyroscope.range, gyroscope.bandwidth)) {
+		/* Turn the LED on and hang to indicate failure */
+		led_1_on();
+		HANG();
+	}
+}
+
+void power_off_gyroscope(void) {
+	/* So gyroscope interrupt is low */
+	gyroscope_empty_read();
+	power_down_gyro();
+	power_off(GYRO_PWR);
+}
+
+void enable_button_pressing(bool enable_triple_tap) {
+	triple_tap_enabled = enable_triple_tap;
+	/* Clear button press buffer */
+	clear_button_press_buffer(&button_press_buffer);
+	/* Set button press interrupt to active to wait on enable_interrupts() */
+	activate_ctrl_interrupt();
+}
+
+void enable_accelerometer_sampling(void) {
+	clear_accel_sample_buffer(&accel_sample_buffer);
+	activate_accel_interrupt();
+}
+
+void enable_gyroscope_sampling(void) {
+	// TODO clear_gyro_sample_buffer(&gyro_sample_buffer);
+	activate_gyro_interrupt();
+}
+
+void accelerometer_empty_read(void) {
+	read_addr_accel(ACCEL_OUTX_H);
+	read_addr_accel(ACCEL_OUTX_L);
+	read_addr_accel(ACCEL_OUTY_H);
+	read_addr_accel(ACCEL_OUTY_L);
+	read_addr_accel(ACCEL_OUTZ_H);
+	read_addr_accel(ACCEL_OUTZ_L);
+}
+
+void gyroscope_empty_read(void) {
+	read_addr_gyro(GYRO_OUTX_H);
+	read_addr_gyro(GYRO_OUTX_L);
+	read_addr_gyro(GYRO_OUTY_H);
+	read_addr_gyro(GYRO_OUTY_L);
+	read_addr_gyro(GYRO_OUTZ_H);
+	read_addr_gyro(GYRO_OUTZ_L);
 }
 
 bool voltage_is_low(void) {
@@ -284,7 +388,7 @@ void init(void) {
 	construct_accel_sample_buffer(&accel_sample_buffer, accel_samples, RAW_SAMPLE_BUFF_SIZE);
 	construct_button_press_buffer(&button_press_buffer, button_presses, BUTTON_BUFF_SIZE);
 	/* Point pointer to buffer */
-	data_sd = data_sd_buff;
+	data_sd = accel_sd_buff.buffer;
 	/* Watchdog timer is on by default */
 	stop_watchdog();
 	/* Set up and configure the clock */
@@ -299,6 +403,10 @@ void init(void) {
 	start_watchdog();
 	/* Initialize the SD card */
 	init_sd_card();
+	/* Deactivate all interrupts */
+	deactivate_interrupts();
+	/* Start the timer */
+	timer_config();
 }
 
 void restart(void) {
@@ -309,22 +417,20 @@ void restart(void) {
 enum DeviceState turn_on(void) {
 	/* Make sure the LED is off */
 	led_1_off();
-	/* We don't want to waste time checking for triple taps in this state */
-	triple_tap_enabled = false;
-	/* Clear button press buffer */
-	clear_button_press_buffer(&button_press_buffer);
+	disable_interrupts();
+	/*
+	 * We don't want to waste time checking for triple taps when device
+	 * is on as we don't have any features which require triple tapping
+	 */
+	enable_button_pressing(false);
 	enable_interrupts();
 	return IDLE_STATE;
 }
 
 enum DeviceState turn_off(void) {
-	/* Deactivate all interrupts except control button interrupt */
-	deactivate_interrupts();
-	activate_ctrl_interrupt();
-	/* We have triple tapping features in this state */
-	triple_tap_enabled = true;
-	/* Clear button press buffer */
-	clear_button_press_buffer(&button_press_buffer);
+	disable_interrupts();
+	/* We have features which require triple tapping when device is off */
+	enable_button_pressing(true);
 	enable_interrupts();
 	return OFF_STATE;
 }
@@ -338,24 +444,55 @@ enum DeviceState start_logging(void) {
 	 * turn on state.
 	 */
 	get_config_settings();
+	disable_interrupts();
+	enable_button_pressing(false);
+	/* Power on logging devices, clear their buffers, and activate their interrupts */
+	if (accelerometer.is_enabled) {
+		power_on_accelerometer();
+		enable_accelerometer_sampling();
+		accelerometer_empty_read(); // TODO if this works, put in enable_accelerometer_sampling()
+	}
+	if (gyroscope.is_enabled) {
+		power_on_gyroscope();
+		enable_gyroscope_sampling();
+		gyroscope_empty_read(); // TODO if this works, put in enable_gyroscope_sampling()
+	}
 	/* Reset timer */
 	time_cont = 0;
-	/* Clear accelerometer samples buffer */
-	clear_accel_sample_buffer(&accel_sample_buffer);
-	// TODO
+	/* Reset time of last sample */
+	timestamp_accel = 0;
+	/* Enable interrupts and (TODO read initial logger data to get first interrupt started) */
+	enable_interrupts();
+	/* TODO see above TODOs
+	if (accelerometer.is_enabled) {
+		accelerometer_empty_read();
+	}
+	if (gyroscope.is_enabled) {
+		gyroscope_empty_read();
+	}
+	*/
 	return LOG_STATE;
 }
 
 enum DeviceState stop_logging(void) {
-	// TODO
+	/* Power off logging devices */
+	if (accelerometer.is_enabled) {
+		power_off_accelerometer();
+	}
+	if (gyroscope.is_enabled) {
+		power_off_gyroscope();
+	}
+	// TODO write final logger data from buffers
+	disable_interrupts();
+	enable_button_pressing(false);
+	enable_interrupts();
 	return IDLE_STATE;
 }
 
 enum DeviceState format_card(void) {
+	disable_interrupts();
 	/* No triple tapping feature in this state */
-	triple_tap_enabled = false;
-	/* Clear button press buffer */
-	clear_button_press_buffer(&button_press_buffer);
+	enable_button_pressing(false);
 	enable_interrupts();
 	return FORMAT_STATE;
 }
@@ -370,7 +507,7 @@ enum DeviceState off_step(void) {
 	bool success = remove_button_press(&button_press_buffer, &button_press);
 #ifdef DEBUG
 	if (!success) {
-		success = false;
+		HANG();
 	}
 #endif
 	/* Change state based on button press */
@@ -389,12 +526,69 @@ enum DeviceState off_step(void) {
 }
 
 enum DeviceState idle_step(void) {
-	// TODO
+	// TODO check for button tap to start logging or button hold to turn off
 	return IDLE_STATE;
 }
 
 enum DeviceState log_step(void) {
-	// TODO
+	/* Check for any button presses */
+	if (button_press_buffer.count > 0) {
+		enum ButtonPress button_press;
+		bool success = remove_button_press(&button_press_buffer, &button_press);
+#ifdef DEBUG
+		if (!success) {
+			HANG();
+		}
+#endif
+		switch(button_press) {
+			case BUTTON_TAP:
+				/* TODO stop logging */
+				break;
+			case BUTTON_HOLD:
+				/* TODO turn off */
+				break;
+		}
+	}
+	/* Check for accelerometer samples */
+	if (accelerometer.is_enabled && accel_sample_buffer.count > 0) {
+		// TODO refactor this to its own function but for now...
+		/* Grab a raw accelerometer sample */
+		/*
+		 * NOTE this assumes that steps are run more often than samples are
+		 * collected
+		 */
+		struct AccelSample accel_sample;
+		bool success = remove_accel_sample(&accel_sample_buffer, &accel_sample);
+#ifdef DEBUG
+		if (!success) {
+			HANG();
+		}
+#endif
+		/* Convert delta time to ascii */
+		/* TMP
+		// tmp algo
+		// set accel_sd_buff.index and gyro_sd_buff.index to 0 somewhere in some state in main loop...
+		uint32_t num = accel_sample.delta_time;
+		uint8_t ascii[6];						// Temporary buffer for ASCII number
+		uint16_t digit = num % 10; 					// Get least significant digit
+		int8_t k = 0;
+		do {								// In case value is 0
+			ascii[k] = digit + 0x30;		// Convert digit to ASCII
+			num = num / 10;					// Truncate least significant digit
+			digit = num % 10;				// Get least significant digit
+			k++;
+		} while (num > 0 && k < 6);
+		--k;
+		// put ascii in buffer
+		do {
+			accel_sd_buff.buffer[accel_sd_buff.index] = ascii[k];
+			++accel_sd_buff.index;
+			--k;
+		} while (k >= 0);
+		*/
+	}
+	/* TODO check for gyro samples */
+	// if (gyroscope.is_enabled && gyro_sample_buffer.count > 0) {
 	return LOG_STATE;
 }
 
@@ -411,7 +605,7 @@ enum DeviceState format_step(void) {
 	bool success = remove_button_press(&button_press_buffer, &button_press);
 #ifdef DEBUG
 	if (!success) {
-		success = false;
+		HANG();
 	}
 #endif
 	/* Perform action based on button press */
@@ -446,7 +640,7 @@ void init_sd_card(void) {
 		restart();
 	}
 	/* Turn back off power to SD card since initialization is complete */
-	power_off(SD_PWR);
+	power_off_sd();
 }
 
 void format_sd_card(void) {
@@ -634,14 +828,15 @@ __interrupt void PORT1_ISR(void) {
 		/* TODO should we clear the flag before getting button pressed data? */
 		clear_int_ctrl();
 		/* Wake up from low power mode */
-		LPM3_EXIT; /* TODO probably does nothing when not in low power mode */
+		/* TODO probably does nothing when not in low power mode but should confirm. */
+		LPM3_EXIT;
 		return;
 	}
 	if (accel_int()) {
 		accel_sample_event();
 		/* Clear accelerometer interrupt flag */
 		/* TODO should we clear the flag before getting sample data? */
-		clear_int_accel();
+		 clear_int_accel();
 	}
 	if (gyro_int()) {
 		gyro_sample_event();
@@ -652,24 +847,29 @@ __interrupt void PORT1_ISR(void) {
 }
 
 void button_press_event(void) {
-	// TODO should we make sure logging interrupts are disabled?
-	disable_interrupts();
+	/* Deactivate interrupts to prevent additional button presses and end sampling */
+	deactivate_interrupts();
 	/* Get button press */
 	enum ButtonPress button_press = get_button_press(triple_tap_enabled);
 	/* Put the button press data in the buffer */
 	bool success = add_button_press(&button_press_buffer, button_press);
 #ifdef DEBUG
 	if (!success) {
-		success = false;
+		HANG();
 	}
 #endif
 }
 
 void accel_sample_event(void) {
+//	deactivate_interrupts(); // TMP
+	
 	/* Get the timestamp */
 	uint32_t timestamp = time_cont << 16 + TA0R;
 	/* Let the timer interrupt run first if triggered */
 	if (timer_interrupt_triggered()) {
+		// TMP
+		accelerometer_empty_read();
+		
 		return;
 	}
 	/* Calculate the delta timestamp for sample data using previous sample's timestamp */
@@ -680,9 +880,10 @@ void accel_sample_event(void) {
 		delta_time = timestamp + (0x1000000 - timestamp_accel);
 	}
 #ifdef DEBUG
-	if (delta_time > 80000 || delta_time < 60000) {
-		delta_time++;
-	}
+	// if (delta_time > 80000 || delta_time < 60000) {
+		// delta_time++;
+		// HANG();
+	// }
 #endif
 	/* Update timestamp */
 	timestamp_accel = timestamp;
@@ -694,7 +895,7 @@ void accel_sample_event(void) {
 		read_addr_accel(ACCEL_OUTZ_H), read_addr_accel(ACCEL_OUTZ_L));
 #ifdef DEBUG
 	if (!success) {
-		success = false;
+		HANG();
 	}
 #endif
 }

@@ -24,7 +24,7 @@ uint8_t init_gyro(uint8_t range_gyro, uint8_t bandwidth_gyro) {
 /* Read WHO_AM_I (0x0F) (page 29)
 	Default value: 0xD3
 */
-	if (read_addr_gyro(0x0F) != 0xD3) return 1;
+	if (read_addr_gyro(0x0F) != 0xD3) return 0;
 
 /* Set CTRL_REG1 (20h) (page 29)
 	Output data rate: user defined (default: 100 Hz)
@@ -64,7 +64,7 @@ uint8_t init_gyro(uint8_t range_gyro, uint8_t bandwidth_gyro) {
 */
 	write_addr_gyro(0x2E, 0x00); // Bypass
 
-	return 0;
+	return 1;
 }
 
 /*----------------------------------------------------------------------------*/

@@ -36,11 +36,6 @@
 /* The size of one FAT16 cluster (32KB) */
 #define MAX_FILE_SIZE 0x8000
 
-/* test */
-enum MaxFileSize {
-	MAX_FILE_SIZE_ENUM = 0x8000
-};
-
 struct Setting *key_value_settings;
 uint8_t num_key_value_settings;
 struct Setting *key_only_settings;

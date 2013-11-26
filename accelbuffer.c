@@ -29,7 +29,7 @@ void clear_accel_sample_buffer(struct AccelSampleBuffer *accel_sample_buffer) {
 
 bool add_accel_sample(struct AccelSampleBuffer *accel_sample_buffer, uint32_t delta_time, uint8_t x_axis_h, uint8_t x_axis_l, uint8_t y_axis_h, uint8_t y_axis_l, uint8_t z_axis_h, uint8_t z_axis_l) {
 	/* The buffer is full */
-	if (accel_sample_buffer->count = accel_sample_buffer->size) {
+	if (accel_sample_buffer->count == accel_sample_buffer->size) {
 		return false;
 	}
 	/* Get the index for the new sample */

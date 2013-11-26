@@ -117,14 +117,14 @@ uint8_t rtc_rdy(void) {
 }
 
 /*----------------------------------------------------------------------------*/
-/* Enable interrupts														  */
+/* Enable interrupts. Doesn't work in interrupt service routine.			  */
 /*----------------------------------------------------------------------------*/
 void enable_interrupts(void) {
 	__enable_interrupt();
 }
 
 /*----------------------------------------------------------------------------*/
-/* Disable interrupts														  */
+/* Disable interrupts. Doesn't work in interrupt service routine.			  */
 /*----------------------------------------------------------------------------*/
 void disable_interrupts(void) {
 	__disable_interrupt();

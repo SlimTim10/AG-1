@@ -24,7 +24,7 @@ uint8_t init_accel(uint8_t range_accel, uint8_t bandwidth_accel) {
 /* Read WHO_AM_I (0x0F) (page 30)
 	Default value: 0x3A
 */
-	if (read_addr_accel(0x0F) != 0x3A) return 1;
+	if (read_addr_accel(0x0F) != 0x3A) return 0;
 
 /* Set CTRL_REG1 (20h) (page 31)
 	Normal mode
@@ -45,7 +45,7 @@ uint8_t init_accel(uint8_t range_accel, uint8_t bandwidth_accel) {
 	tmp8 = (range_accel << 7) | 0x05;
 	write_addr_accel(0x21, tmp8);
 	
-	return 0;
+	return 1;
 }
 
 /*----------------------------------------------------------------------------*/
