@@ -8,6 +8,7 @@ void construct_button_press_buffer(struct ButtonPressBuffer *button_press_buffer
 	button_press_buffer->button_presses = button_presses;
 	button_press_buffer->size = size;
 	button_press_buffer->start = 0;
+	button_press_buffer->end = 0;
 	button_press_buffer->count = 0;
 }
 
@@ -16,6 +17,7 @@ void clear_button_press_buffer(struct ButtonPressBuffer *button_press_buffer) {
 		button_press_buffer->button_presses[i] = BUTTON_NONE;
 	}
 	button_press_buffer->start = 0;
+	button_press_buffer->end = 0;
 	button_press_buffer->count = 0;
 }
 
@@ -24,11 +26,11 @@ bool add_button_press(struct ButtonPressBuffer *button_press_buffer, enum Button
 	if (button_press_buffer->count == button_press_buffer->size) {
 		return false;
 	}
-	/* Get the index for the new button press */
-	++button_press_buffer->count;
-	uint16_t end = (button_press_buffer->start + button_press_buffer->count) % button_press_buffer->size;
 	/* Set data for new button press based on parameter */
-	button_press_buffer->button_presses[end] = button_press;
+	button_press_buffer->button_presses[button_press_buffer->end] = button_press;
+	/* Increment the index for the next button press */
+	button_press_buffer->end = (button_press_buffer->end + 1) % button_press_buffer->size;
+	++button_press_buffer->count;
 	return true;
 }
 

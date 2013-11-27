@@ -21,6 +21,7 @@ struct AccelSampleBuffer {
 	struct AccelSample *accel_samples;
 	uint16_t size;
 	uint16_t start;
+	uint16_t end;
 	uint16_t count;
 };
 

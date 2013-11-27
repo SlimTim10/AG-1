@@ -15,6 +15,7 @@ void construct_accel_sample_buffer(struct AccelSampleBuffer *accel_sample_buffer
 	accel_sample_buffer->accel_samples = accel_samples;
 	accel_sample_buffer->size = size;
 	accel_sample_buffer->start = 0;
+	accel_sample_buffer->end = 0;
 	accel_sample_buffer->count = 0;
 }
 
@@ -24,6 +25,7 @@ void clear_accel_sample_buffer(struct AccelSampleBuffer *accel_sample_buffer) {
 		clear_accel_sample(accel_sample);
 	}
 	accel_sample_buffer->start = 0;
+	accel_sample_buffer->end = 0;
 	accel_sample_buffer->count = 0;
 }
 
@@ -32,11 +34,8 @@ bool add_accel_sample(struct AccelSampleBuffer *accel_sample_buffer, uint32_t de
 	if (accel_sample_buffer->count == accel_sample_buffer->size) {
 		return false;
 	}
-	/* Get the index for the new sample */
-	++accel_sample_buffer->count;
-	uint16_t end = (accel_sample_buffer->start + accel_sample_buffer->count) % accel_sample_buffer->size;
 	/* Set data for new sample based on parameters */
-	struct AccelSample *accel_sample = &accel_sample_buffer->accel_samples[end];
+	struct AccelSample *accel_sample = &accel_sample_buffer->accel_samples[accel_sample_buffer->end];
 	accel_sample->delta_time = delta_time;
 	accel_sample->x_axis[0] = x_axis_h;
 	accel_sample->x_axis[1] = x_axis_l;
@@ -44,6 +43,9 @@ bool add_accel_sample(struct AccelSampleBuffer *accel_sample_buffer, uint32_t de
 	accel_sample->y_axis[1] = y_axis_l;
 	accel_sample->z_axis[0] = z_axis_h;
 	accel_sample->z_axis[0] = z_axis_l;
+	/* Increment the index for the next sample */
+	accel_sample_buffer->end = (accel_sample_buffer->end + 1) % accel_sample_buffer->size;
+	++accel_sample_buffer->count;
 	return true;
 }
 

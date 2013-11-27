@@ -29,7 +29,7 @@
 /* Small delay */
 #define POWER_ON_DELAY() \
 	for (uint8_t j = 0; j < CLOCK_SPEED; j++) { \
-		for (uint16_t i = 0; i < 1000; i++); \
+		for (uint16_t i = 0; i < 5000; i++); \
 	}
 
 
@@ -113,9 +113,9 @@ enum DeviceState format_step(void);
 void init_sd_card(void);
 void format_sd_card(void);
 void get_config_settings(void);
-void button_press_event(void);
-void accel_sample_event(void);
-void gyro_sample_event(void);
+bool button_press_event_handled(void);
+bool accel_sample_event_handled(void);
+bool gyro_sample_event_handled(void);
 bool timer_interrupt_triggered(void);
 void clear_timer_interrupt(void);
 bool button_interrupt_triggered(void);
@@ -293,13 +293,16 @@ void enable_button_pressing(bool enable_triple_tap) {
 void enable_accelerometer_sampling(void) {
 	clear_accel_sample_buffer(&accel_sample_buffer);
 	activate_accel_interrupt();
+	set_int_accel();
 }
 
 void enable_gyroscope_sampling(void) {
 	// TODO clear_gyro_sample_buffer(&gyro_sample_buffer);
 	activate_gyro_interrupt();
+	set_int_gyro();
 }
 
+// TODO possibly use set_int_accel() / clear_int_accel() instead?
 void accelerometer_empty_read(void) {
 	read_addr_accel(ACCEL_OUTX_H);
 	read_addr_accel(ACCEL_OUTX_L);
@@ -309,6 +312,7 @@ void accelerometer_empty_read(void) {
 	read_addr_accel(ACCEL_OUTZ_L);
 }
 
+// TODO possibly use set_int_gyro() / clear_int_gyro() instead?
 void gyroscope_empty_read(void) {
 	read_addr_gyro(GYRO_OUTX_H);
 	read_addr_gyro(GYRO_OUTX_L);
@@ -450,27 +454,17 @@ enum DeviceState start_logging(void) {
 	if (accelerometer.is_enabled) {
 		power_on_accelerometer();
 		enable_accelerometer_sampling();
-		accelerometer_empty_read(); // TODO if this works, put in enable_accelerometer_sampling()
 	}
 	if (gyroscope.is_enabled) {
 		power_on_gyroscope();
 		enable_gyroscope_sampling();
-		gyroscope_empty_read(); // TODO if this works, put in enable_gyroscope_sampling()
 	}
 	/* Reset timer */
 	time_cont = 0;
 	/* Reset time of last sample */
 	timestamp_accel = 0;
-	/* Enable interrupts and (TODO read initial logger data to get first interrupt started) */
+	/* Stamp capturing samples */
 	enable_interrupts();
-	/* TODO see above TODOs
-	if (accelerometer.is_enabled) {
-		accelerometer_empty_read();
-	}
-	if (gyroscope.is_enabled) {
-		gyroscope_empty_read();
-	}
-	*/
 	return LOG_STATE;
 }
 
@@ -823,54 +817,55 @@ __interrupt void CCR0_ISR(void) {
 #pragma vector = PORT1_VECTOR
 __interrupt void PORT1_ISR(void) {
 	if (button_interrupt_triggered()) {
-		button_press_event();
-		/* Clear CTRL button interrupt flag */
-		/* TODO should we clear the flag before getting button pressed data? */
-		clear_int_ctrl();
-		/* Wake up from low power mode */
-		/* TODO probably does nothing when not in low power mode but should confirm. */
-		LPM3_EXIT;
-		return;
+		if (button_press_event_handled()) {
+			/* TODO should we clear the flag before getting button pressed data? */
+			clear_int_ctrl();
+			/* Wake up from low power mode */
+			/* TODO probably does nothing when not in low power mode but should confirm. */
+			LPM3_EXIT;
+			return;
+		}
 	}
 	if (accel_int()) {
-		accel_sample_event();
-		/* Clear accelerometer interrupt flag */
-		/* TODO should we clear the flag before getting sample data? */
-		 clear_int_accel();
+		//clear_int_accel(); TODO unnecessary?
+		if (!accel_sample_event_handled()) {
+			/* Trigger interrupt to try again to capture current accelerometer sample */
+			set_int_accel();
+		}
 	}
 	if (gyro_int()) {
-		gyro_sample_event();
-		/* Clear gyroscope interrupt flag */
-		/* TODO should we clear the flag before getting sample data? */
-		clear_int_gyro();
+		//clear_int_gyro(); TODO unnecessary?
+		if (!gyro_sample_event_handled()) {
+			/* Trigger interrupt to try again to capture current gyroscope sample */
+			set_int_gyro();
+		}
 	}
 }
 
-void button_press_event(void) {
+bool button_press_event_handled(void) {
 	/* Deactivate interrupts to prevent additional button presses and end sampling */
 	deactivate_interrupts();
 	/* Get button press */
 	enum ButtonPress button_press = get_button_press(triple_tap_enabled);
 	/* Put the button press data in the buffer */
 	bool success = add_button_press(&button_press_buffer, button_press);
-#ifdef DEBUG
 	if (!success) {
+#ifdef DEBUG
 		HANG();
-	}
 #endif
+		return false;
+	}
+	return true;
 }
 
-void accel_sample_event(void) {
+bool accel_sample_event_handled(void) {
 //	deactivate_interrupts(); // TMP
 	
 	/* Get the timestamp */
 	uint32_t timestamp = time_cont << 16 + TA0R;
-	/* Let the timer interrupt run first if triggered */
+	/* Let the timer interrupt run first and then capture sample */
 	if (timer_interrupt_triggered()) {
-		// TMP
-		accelerometer_empty_read();
-		
-		return;
+		return false;
 	}
 	/* Calculate the delta timestamp for sample data using previous sample's timestamp */
 	uint32_t delta_time;
@@ -887,21 +882,23 @@ void accel_sample_event(void) {
 #endif
 	/* Update timestamp */
 	timestamp_accel = timestamp;
-	
 	/* Put the accelerometer sample data in the buffer */
 	bool success = add_accel_sample(&accel_sample_buffer, delta_time,
 		read_addr_accel(ACCEL_OUTX_H), read_addr_accel(ACCEL_OUTX_L),
 		read_addr_accel(ACCEL_OUTY_H), read_addr_accel(ACCEL_OUTY_L),
 		read_addr_accel(ACCEL_OUTZ_H), read_addr_accel(ACCEL_OUTZ_L));
-#ifdef DEBUG
 	if (!success) {
+#ifdef DEBUG
 		HANG();
-	}
 #endif
+		return false;
+	}
+	return true;
 }
 
-void gyro_sample_event(void) {
+bool gyro_sample_event_handled(void) {
 	// TODO
+	return true;
 }
 
 bool timer_interrupt_triggered(void) {
