@@ -53,6 +53,15 @@ enum { BUTTON_HOLD_TIME = 2 };
 /* Time (in seconds) to detect a successive button press */
 enum { BUTTON_TIME_WINDOW = 1 };
 
+/* ASCII character used as delimiter for logger data */
+enum { DELIMITER = ',' };
+
+/* ASCII character used to indicate that the next character starts on a new line */
+enum { NEW_LINE = '\n' };
+
+/* Indicates the end of a character array */
+enum { NULL_TERMINATOR = '\0' };
+
 /* Possible states of the device */
 enum DeviceState {
 	OFF_STATE,
@@ -112,6 +121,7 @@ enum DeviceState log_step(void);
 enum DeviceState format_step(void);
 void init_sd_card(void);
 void format_sd_card(void);
+void write_full_buffer_to_sd_card(struct SdCardBuffer *const sd_card_buffer);
 void get_config_settings(void);
 bool button_press_event_handled(void);
 bool accel_sample_event_handled(void);
@@ -205,6 +215,51 @@ struct Logger gyroscope;
 	// .accel_enabled = 1,
 	// .gyro_enabled = 1
 // };
+
+/*
+ * C++ version 0.4 char* style "itoa":
+ * Original written by Lukas Chmela
+ * Released under GPLv3.
+ */
+uint8_t* itoa(int32_t value, uint8_t* result);
+
+int16_t int8arr_to_int16(uint8_t *value);
+
+uint8_t* itoa(int32_t value, uint8_t* result) {
+	uint8_t* ptr = result, *ptr1 = result, tmp_char;
+	int32_t tmp_value;
+	uint8_t base = 10;
+
+	do {
+		tmp_value = value;
+		value /= base;
+		*ptr++ = "9876543210123456789" [9 + (tmp_value - value * base)];
+	} while ( value );
+
+	/* Apply negative sign */
+	if (tmp_value < 0) *ptr++ = '-';
+	*ptr-- = NULL_TERMINATOR;
+	while(ptr1 < ptr) {
+		tmp_char = *ptr;
+		*ptr--= *ptr1;
+		*ptr1++ = tmp_char;
+	}
+	return result;
+}
+
+int16_t int8arr_to_int16(uint8_t *value) {
+	int16_t result = (*value << 8) | *(value + 1);
+	return result;
+	
+//	// TODO old method; see TODO below
+//	int32_t result = (value[0] << 8) | value[1];
+//	/* Check whether the number is negative by two's complement */
+//	if (result >= 32768) {
+//		// TODO why -0 instead of -32768? Might have to change function name...
+//		result = -((~result + 1) & 0x7FFF);
+//	}
+//	return result;
+}
 
 void start_watchdog(void) {
 #ifndef DEBUG
@@ -558,28 +613,61 @@ enum DeviceState log_step(void) {
 			HANG();
 		}
 #endif
-		/* Convert delta time to ascii */
-		/* TMP
-		// tmp algo
-		// set accel_sd_buff.index and gyro_sd_buff.index to 0 somewhere in some state in main loop...
-		uint32_t num = accel_sample.delta_time;
-		uint8_t ascii[6];						// Temporary buffer for ASCII number
-		uint16_t digit = num % 10; 					// Get least significant digit
-		int8_t k = 0;
-		do {								// In case value is 0
-			ascii[k] = digit + 0x30;		// Convert digit to ASCII
-			num = num / 10;					// Truncate least significant digit
-			digit = num % 10;				// Get least significant digit
-			k++;
-		} while (num > 0 && k < 6);
-		--k;
-		// put ascii in buffer
-		do {
-			accel_sd_buff.buffer[accel_sd_buff.index] = ascii[k];
-			++accel_sd_buff.index;
-			--k;
-		} while (k >= 0);
-		*/
+		// TODO dear god, refactor this...
+		/* Convert delta time to ascii and put in SD card buffer */
+		{
+			/* Max timestamp value is 6 digits */
+			uint8_t ascii_buffer[6];
+			itoa(accel_sample.delta_time, ascii_buffer);
+			for (uint8_t i = 0; ascii_buffer[i] != NULL_TERMINATOR && i < 6; ++i) {
+				accel_sd_buff.buffer[accel_sd_buff.index++] = ascii_buffer[i];
+				write_full_buffer_to_sd_card(&accel_sd_buff);
+			}
+		}
+		/* Add delimiter */
+		accel_sd_buff.buffer[accel_sd_buff.index++] = DELIMITER;
+		write_full_buffer_to_sd_card(&accel_sd_buff);
+		/* Convert axes to ascii and put in SD card buffer */
+		{
+			/* Max axis value is 5 digits plus sign */
+			uint8_t ascii_buffer[6];
+			/* X-axis */
+			{
+				int16_t x_axis = int8arr_to_int16(accel_sample.x_axis);
+				itoa(x_axis, ascii_buffer);
+				for (uint8_t i = 0; ascii_buffer[i] != NULL_TERMINATOR && i < 6; ++i) {
+					accel_sd_buff.buffer[accel_sd_buff.index++] = ascii_buffer[i];
+					write_full_buffer_to_sd_card(&accel_sd_buff);
+				}
+			}
+			/* Add delimiter */
+			accel_sd_buff.buffer[accel_sd_buff.index++] = DELIMITER;
+			write_full_buffer_to_sd_card(&accel_sd_buff);
+			/* Y-axis */
+			{
+				int16_t y_axis = int8arr_to_int16(accel_sample.y_axis);
+				itoa(y_axis, ascii_buffer);
+				for (uint8_t i = 0; ascii_buffer[i] != NULL_TERMINATOR && i < 6; ++i) {
+					accel_sd_buff.buffer[accel_sd_buff.index++] = ascii_buffer[i];
+					write_full_buffer_to_sd_card(&accel_sd_buff);
+				}
+			}
+			/* Add delimiter */
+			accel_sd_buff.buffer[accel_sd_buff.index++] = DELIMITER;
+			write_full_buffer_to_sd_card(&accel_sd_buff);
+			/* Z-axis */
+			{
+				int16_t z_axis = int8arr_to_int16(accel_sample.z_axis);
+				itoa(z_axis, ascii_buffer);
+				for (uint8_t i = 0; ascii_buffer[i] != NULL_TERMINATOR && i < 6; ++i) {
+					accel_sd_buff.buffer[accel_sd_buff.index++] = ascii_buffer[i];
+					write_full_buffer_to_sd_card(&accel_sd_buff);
+				}
+			}
+		}
+		/* Next sample is written on a new line */
+		accel_sd_buff.buffer[accel_sd_buff.index++] = NEW_LINE;
+		write_full_buffer_to_sd_card(&accel_sd_buff);
 	}
 	/* TODO check for gyro samples */
 	// if (gyroscope.is_enabled && gyro_sample_buffer.count > 0) {
@@ -647,6 +735,19 @@ void format_sd_card(void) {
 	/* Format the SD card, using LED 1 to indicate it's being formatted */
 	format_sd(data_sd, &fatinfo, led_1_on, led_1_toggle, led_1_off);
 	restart();
+}
+
+void write_full_buffer_to_sd_card(struct SdCardBuffer *const sd_card_buffer) {
+	if (sd_card_buffer->index >= SD_SAMPLE_BUFF_SIZE) {
+		// TODO write buffer to SD card
+		bool success; // = write_block(...);
+#ifdef DEBUG
+		if (!success) {
+			HANG();
+		}
+#endif
+		sd_card_buffer->index = 0;
+	}
 }
 
 void set_disabled_accel(uint16_t disabled) {
@@ -827,14 +928,14 @@ __interrupt void PORT1_ISR(void) {
 		}
 	}
 	if (accel_int()) {
-		//clear_int_accel(); TODO unnecessary?
+		//clear_int_accel(); //TODO unnecessary?
 		if (!accel_sample_event_handled()) {
 			/* Trigger interrupt to try again to capture current accelerometer sample */
 			set_int_accel();
 		}
 	}
 	if (gyro_int()) {
-		//clear_int_gyro(); TODO unnecessary?
+		//clear_int_gyro(); //TODO unnecessary?
 		if (!gyro_sample_event_handled()) {
 			/* Trigger interrupt to try again to capture current gyroscope sample */
 			set_int_gyro();
@@ -859,10 +960,8 @@ bool button_press_event_handled(void) {
 }
 
 bool accel_sample_event_handled(void) {
-//	deactivate_interrupts(); // TMP
-	
 	/* Get the timestamp */
-	uint32_t timestamp = time_cont << 16 + TA0R;
+	uint32_t timestamp = (time_cont << 16) + TA0R;
 	/* Let the timer interrupt run first and then capture sample */
 	if (timer_interrupt_triggered()) {
 		return false;
@@ -875,10 +974,10 @@ bool accel_sample_event_handled(void) {
 		delta_time = timestamp + (0x1000000 - timestamp_accel);
 	}
 #ifdef DEBUG
-	// if (delta_time > 80000 || delta_time < 60000) {
-		// delta_time++;
-		// HANG();
-	// }
+//	if (delta_time > 80000 || delta_time < 60000) {
+//		delta_time++;
+//		//HANG();
+//	}
 #endif
 	/* Update timestamp */
 	timestamp_accel = timestamp;
