@@ -357,7 +357,7 @@ uint32_t get_cluster_offset(uint16_t clust, struct fatstruct *info) {
 }
 
 /*
- * Return true iff block number is less than nsectsinclust
+ * Return true if block number is less than nsectsinclust. Otherwise, return false.
  */
 uint8_t valid_block(uint8_t block, struct fatstruct *info) {
 	return block < info->nsectsinclust;
@@ -416,13 +416,13 @@ uint8_t update_fat(uint8_t *data, struct fatstruct *info, uint16_t index, uint16
  * file_size: total bytes in file
  * file_num: file name number suffix
  */
-/* TODO Contains project specific code, i.e., dte */
+/* TODO parameter to specify whether ACCL or GYRO file name and parameter for file number */
 uint8_t update_dir_table(uint8_t *data, struct fatstruct *info, uint16_t cluster, uint32_t file_size) {
 
 	uint8_t err;
 
 	/* Directory table entry (MUST BE 32 BYTES) */
-	uint8_t dte[] = "DATA000 WAV\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
+	uint8_t dte[] = "DATA000 CSV\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
 		"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00";
 
 	/* Read the directory table. */

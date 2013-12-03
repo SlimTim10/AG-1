@@ -38,7 +38,7 @@
 /* 1.5KB */
 enum { RAW_SAMPLE_BUFF_SIZE = 150 };
 
-/* Should be same size as SD card write block, so 512B */
+/* Should be a multiple of SD card write block (512B) */
 enum { SD_SAMPLE_BUFF_SIZE = 512 };
 
 /* 1B */
@@ -78,9 +78,19 @@ struct Logger {
 };
 
 /* Buffer of data to write to SD card */
+// TODO rename to SdCardFile or something
 struct SdCardBuffer {
 	uint8_t buffer[SD_SAMPLE_BUFF_SIZE];
+	/* Current index in buffer */
 	uint16_t index;
+	/* First cluster index */
+	uint16_t start_cluster;
+	/* Current cluster index */
+	uint32_t cluster;
+	/* Number of blocks */
+	uint8_t block_num;
+	/* Total bytes */
+	uint32_t size;
 };
 
 /*
@@ -121,7 +131,9 @@ enum DeviceState log_step(void);
 enum DeviceState format_step(void);
 void init_sd_card(void);
 void format_sd_card(void);
-void write_full_buffer_to_sd_card(struct SdCardBuffer *const sd_card_buffer);
+void new_sd_card_file(struct SdCardBuffer *const sd_card_buffer);
+uint32_t get_block_offset(const struct SdCardBuffer *const sd_card_buffer);
+bool write_full_buffer_to_sd_card(struct SdCardBuffer *const sd_card_buffer);
 void get_config_settings(void);
 bool button_press_event_handled(void);
 bool accel_sample_event_handled(void);
@@ -509,10 +521,12 @@ enum DeviceState start_logging(void) {
 	if (accelerometer.is_enabled) {
 		power_on_accelerometer();
 		enable_accelerometer_sampling();
+		new_sd_card_file(&accel_sd_buff);
 	}
 	if (gyroscope.is_enabled) {
 		power_on_gyroscope();
 		enable_gyroscope_sampling();
+		new_sd_card_file(&gyro_sd_buff);
 	}
 	/* Reset timer */
 	time_cont = 0;
@@ -524,11 +538,23 @@ enum DeviceState start_logging(void) {
 }
 
 enum DeviceState stop_logging(void) {
-	/* Power off logging devices */
+	/* Update the FAT directory table and power off logging devices */
 	if (accelerometer.is_enabled) {
+		if (update_dir_table(accel_sd_buff.buffer, &fatinfo, accel_sd_buff.start_cluster, accel_sd_buff.size) != FAT_SUCCESS) {
+#ifdef DEBUG
+			HANG();
+#endif
+			// TODO logging error
+		}
 		power_off_accelerometer();
 	}
 	if (gyroscope.is_enabled) {
+		if (update_dir_table(gyro_sd_buff.buffer, &fatinfo, gyro_sd_buff.start_cluster, gyro_sd_buff.size) != FAT_SUCCESS) {
+#ifdef DEBUG
+			HANG();
+#endif
+			// TODO logging error
+		}
 		power_off_gyroscope();
 	}
 	// TODO write final logger data from buffers
@@ -621,12 +647,16 @@ enum DeviceState log_step(void) {
 			itoa(accel_sample.delta_time, ascii_buffer);
 			for (uint8_t i = 0; ascii_buffer[i] != NULL_TERMINATOR && i < 6; ++i) {
 				accel_sd_buff.buffer[accel_sd_buff.index++] = ascii_buffer[i];
-				write_full_buffer_to_sd_card(&accel_sd_buff);
+				if (!write_full_buffer_to_sd_card(&accel_sd_buff)) {
+					return stop_logging();
+				}
 			}
 		}
 		/* Add delimiter */
 		accel_sd_buff.buffer[accel_sd_buff.index++] = DELIMITER;
-		write_full_buffer_to_sd_card(&accel_sd_buff);
+		if (!write_full_buffer_to_sd_card(&accel_sd_buff)) {
+			return stop_logging();
+		}
 		/* Convert axes to ascii and put in SD card buffer */
 		{
 			/* Max axis value is 5 digits plus sign */
@@ -637,37 +667,49 @@ enum DeviceState log_step(void) {
 				itoa(x_axis, ascii_buffer);
 				for (uint8_t i = 0; ascii_buffer[i] != NULL_TERMINATOR && i < 6; ++i) {
 					accel_sd_buff.buffer[accel_sd_buff.index++] = ascii_buffer[i];
-					write_full_buffer_to_sd_card(&accel_sd_buff);
+					if (!write_full_buffer_to_sd_card(&accel_sd_buff)) {
+						return stop_logging();
+					}
 				}
 			}
 			/* Add delimiter */
 			accel_sd_buff.buffer[accel_sd_buff.index++] = DELIMITER;
-			write_full_buffer_to_sd_card(&accel_sd_buff);
+			if (!write_full_buffer_to_sd_card(&accel_sd_buff)) {
+				return stop_logging();
+			}
 			/* Y-axis */
 			{
 				int16_t y_axis = int8arr_to_int16(accel_sample.y_axis);
 				itoa(y_axis, ascii_buffer);
 				for (uint8_t i = 0; ascii_buffer[i] != NULL_TERMINATOR && i < 6; ++i) {
 					accel_sd_buff.buffer[accel_sd_buff.index++] = ascii_buffer[i];
-					write_full_buffer_to_sd_card(&accel_sd_buff);
+					if (!write_full_buffer_to_sd_card(&accel_sd_buff)) {
+						return stop_logging();
+					}
 				}
 			}
 			/* Add delimiter */
 			accel_sd_buff.buffer[accel_sd_buff.index++] = DELIMITER;
-			write_full_buffer_to_sd_card(&accel_sd_buff);
+			if (!write_full_buffer_to_sd_card(&accel_sd_buff)) {
+				return stop_logging();
+			}
 			/* Z-axis */
 			{
 				int16_t z_axis = int8arr_to_int16(accel_sample.z_axis);
 				itoa(z_axis, ascii_buffer);
 				for (uint8_t i = 0; ascii_buffer[i] != NULL_TERMINATOR && i < 6; ++i) {
 					accel_sd_buff.buffer[accel_sd_buff.index++] = ascii_buffer[i];
-					write_full_buffer_to_sd_card(&accel_sd_buff);
+					if (!write_full_buffer_to_sd_card(&accel_sd_buff)) {
+						return stop_logging();
+					}
 				}
 			}
 		}
 		/* Next sample is written on a new line */
 		accel_sd_buff.buffer[accel_sd_buff.index++] = NEW_LINE;
-		write_full_buffer_to_sd_card(&accel_sd_buff);
+		if (!write_full_buffer_to_sd_card(&accel_sd_buff)) {
+			return stop_logging();
+		}
 	}
 	/* TODO check for gyro samples */
 	// if (gyroscope.is_enabled && gyro_sample_buffer.count > 0) {
@@ -737,17 +779,55 @@ void format_sd_card(void) {
 	restart();
 }
 
-void write_full_buffer_to_sd_card(struct SdCardBuffer *const sd_card_buffer) {
-	if (sd_card_buffer->index >= SD_SAMPLE_BUFF_SIZE) {
-		// TODO write buffer to SD card
-		bool success; // = write_block(...);
+void new_sd_card_file(struct SdCardBuffer *const sd_card_buffer) {
+	sd_card_buffer->start_cluster = find_cluster(sd_card_buffer->buffer, &fatinfo);
+	/* The SD card is full */
+	if (!sd_card_buffer->start_cluster) {
 #ifdef DEBUG
-		if (!success) {
-			HANG();
-		}
+		HANG();
 #endif
-		sd_card_buffer->index = 0;
+		// TODO SD card full
 	}
+	sd_card_buffer->index = 0;
+	sd_card_buffer->cluster = sd_card_buffer->start_cluster;
+	sd_card_buffer->block_num = 0;
+	sd_card_buffer->size = 0;
+}
+
+uint32_t get_block_offset(const struct SdCardBuffer *const sd_card_buffer) {
+	return get_cluster_offset(sd_card_buffer->cluster, &fatinfo) + sd_card_buffer->block_num * SD_SAMPLE_BUFF_SIZE;
+}
+
+bool write_full_buffer_to_sd_card(struct SdCardBuffer *const sd_card_buffer) {
+	if (sd_card_buffer->index >= SD_SAMPLE_BUFF_SIZE) {
+		/* Write entire buffer to SD card */
+		uint32_t block_offset = get_block_offset(sd_card_buffer);
+		if (write_block(sd_card_buffer->buffer, block_offset, SD_SAMPLE_BUFF_SIZE) != SD_SUCCESS) {
+#ifdef DEBUG
+			HANG();
+#endif
+			return false;
+		}
+		/* Prepare for writing next block */
+		sd_card_buffer->size += SD_SAMPLE_BUFF_SIZE;
+		sd_card_buffer->index = 0;
+		++sd_card_buffer->block_num;
+		if (!valid_block(sd_card_buffer->block_num, &fatinfo)) {
+			// TMP
+			return false;
+			sd_card_buffer->cluster = find_cluster(sd_card_buffer->buffer, &fatinfo);
+			/* The SD card is full */
+			if (!sd_card_buffer->cluster) {
+#ifdef DEBUG
+				HANG();
+#endif
+				// TODO SD card full
+				return false;
+			}
+			sd_card_buffer->block_num = 0;
+		}
+	}
+	return true;
 }
 
 void set_disabled_accel(uint16_t disabled) {
