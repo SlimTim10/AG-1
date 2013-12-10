@@ -105,10 +105,6 @@ uint8_t accel_int(void) {
 	return (P1IN & BIT5) != 0;
 }
 
-/*
- * Return accelerometer range bits corresponding to range n
- * LIS3LV02DL Accelerometer
- */
 /*----------------------------------------------------------------------------*/
 /* Return accelerometer range bits corresponding to range n					  */
 /*----------------------------------------------------------------------------*/
@@ -119,6 +115,17 @@ uint8_t range_bits_accel(uint16_t n) {
 		return 1;			// 1: +/-6 g
 	} else {
 		return DEFAULT_RANGE_ACCEL;
+	}
+}
+
+/*----------------------------------------------------------------------------*/
+/* Return accelerometer range in g corresponding to range bits				  */
+/*----------------------------------------------------------------------------*/
+uint8_t range_bits_to_g_accel(uint8_t n) {
+	if (n == 0) {
+		return 2;
+	} else {
+		return 6;
 	}
 }
 

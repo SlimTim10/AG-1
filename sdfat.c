@@ -39,6 +39,12 @@
 #include "const.h"
 
 /*
+ * Return the end index of file name match with string starting at offset.
+ * Otherwise, return 0.
+ */
+uint8_t file_name_match_end(const uint8_t *file_name, const uint8_t *string, uint32_t offset);
+
+/*
  * Initialize SD Card
  */
 uint8_t init_sd(void) {
@@ -171,16 +177,17 @@ void wait_notbusy(void) {
  * Wait for Start Block token
  */
 uint8_t wait_startblock(void) {
-	for (uint16_t i = 0; i < SD_MED_TIMEOUT; i++) {
-		uint8_t rec = spia_rec();
-		if (rec == SD_START_BLOCK) {	/* Start Block token received */
-			return SD_SUCCESS;
-		}
-		if (rec != SD_BLOCK_ERR) {	/* Error */
-			return SD_BAD_TOKEN;
-		}
+	/* Wait until ready */
+	uint8_t rec = spia_rec();
+	while (rec == SD_BLOCK_ERR) {
+		rec = spia_rec();
 	}
-	return SD_TIMEOUT;
+	/* Start Block token received */
+	if (rec == SD_START_BLOCK) {
+		return SD_SUCCESS;
+	}
+	/* Error */
+	return SD_BAD_TOKEN;
 }
 
 #if 0
@@ -321,7 +328,9 @@ uint16_t find_cluster(uint8_t *data, struct fatstruct *info) {
 		/* Read each new block of the FAT */
 		if (j == 0) {
 			block_offset = info->fatoffset + i;
-			if (read_block(data, block_offset)) return 0;
+			if (read_block(data, block_offset)) {
+				return 0;
+			}
 		}
 		
 		if (data[j] == 0x00 && data[j+1] == 0x00) {
@@ -332,7 +341,9 @@ uint16_t find_cluster(uint8_t *data, struct fatstruct *info) {
 			data[j+1] = 0xFF;
 
 			/* Write to FAT  */
-			if (write_block(data, block_offset, BLKSIZE)) return 0;
+			if (write_block(data, block_offset, BLKSIZE)) {
+				return 0;
+			}
 
 			/* Write to second FAT  */
 			if (info->nfats > 1) {
@@ -374,6 +385,7 @@ uint8_t update_fat(uint8_t *data, struct fatstruct *info, uint16_t index, uint16
 	{
 		uint8_t err = read_block(data, block_offset);
 		if (err) {
+			err++;
 			return err;
 		}
 	}
@@ -388,6 +400,7 @@ uint8_t update_fat(uint8_t *data, struct fatstruct *info, uint16_t index, uint16
 	{
 		uint8_t err = write_block(data, block_offset, 512);
 		if (err) {
+			err++;
 			return err;
 		}
 	}
@@ -396,6 +409,7 @@ uint8_t update_fat(uint8_t *data, struct fatstruct *info, uint16_t index, uint16
 	if (info->nfats > 1) {
 		uint8_t err = write_block(data, block_offset + info->fatsize, 512);
 		if (err) {
+			err++;
 			return err;
 		}
 	}
@@ -414,10 +428,11 @@ uint8_t update_fat(uint8_t *data, struct fatstruct *info, uint16_t index, uint16
  *
  * cluster: file's starting cluster
  * file_size: total bytes in file
+ * file_name: file name prefix (truncated if greater than
  * file_num: file name number suffix
  */
 /* TODO parameter to specify whether ACCL or GYRO file name and parameter for file number */
-uint8_t update_dir_table(uint8_t *data, struct fatstruct *info, uint16_t cluster, uint32_t file_size) {
+uint8_t update_dir_table(uint8_t *data, struct fatstruct *info, uint16_t cluster, uint32_t file_size, uint8_t *file_name, uint16_t file_num) {
 
 	uint8_t err;
 
@@ -462,18 +477,21 @@ uint8_t update_dir_table(uint8_t *data, struct fatstruct *info, uint16_t cluster
 	
 	/* Offset of directory table entry */
 	uint32_t dir_entry_offset = info->dtoffset + i;
-
-	/* Set filename prefix */
-	dte[0] = 'D'; dte[1] = 'A'; dte[2] = 'T'; dte[3] = 'A';
-
-	/* Set file number equal to entry number + 1 (start at 001) */
-	uint16_t file_num = (i / 32) + 1;
-
-	/* Set filename suffix (e.g., "012") */
-	dte[4] = ((file_num / 100) % 10) + 0x30;
-	dte[5] = ((file_num / 10) % 10) + 0x30;
-	dte[6] = (file_num % 10) + 0x30;
-
+	
+	/* Set filename */
+	{
+		uint8_t k = 0;
+		/* Prefix */
+		while (file_name[k] != '\0' && k < MAX_FILE_NAME) {
+			dte[k] = file_name[k];
+			++k;
+		}
+		/* Suffix (e.g., "012") */
+		dte[k] = ((file_num / 100) % 10) + 0x30;
+		dte[++k] = ((file_num / 10) % 10) + 0x30;
+		dte[++k] = (file_num % 10) + 0x30;
+	}
+	
 	/* Set starting cluster */
 	dte[26] = WTOB_L(cluster);
 	dte[27] = WTOB_H(cluster);
@@ -493,8 +511,7 @@ uint8_t update_dir_table(uint8_t *data, struct fatstruct *info, uint16_t cluster
 	
 	/* We can only write blocks of nbytesinsect bytes, so make sure the offset
 	   we're writing to is at the beginning of a sector */
-	write_block(data,
-				dir_entry_offset - (dir_entry_offset % info->nbytesinsect), 512);
+	write_block(data, dir_entry_offset - (dir_entry_offset % info->nbytesinsect), 512);
 	
 	return FAT_SUCCESS;
 }
@@ -784,7 +801,7 @@ void format_sd(uint8_t *data, struct fatstruct *info, void (*pre_format)(), void
 	post_format();
 }
 
-uint16_t get_file_num(uint8_t *data, struct fatstruct *info) {
+uint16_t get_file_num(uint8_t *data, const struct fatstruct *info, const uint8_t *file_name) {
 	/* Highest file number suffix */
 	uint16_t max = 0;
 	/* Directory table byte count */
@@ -804,30 +821,44 @@ uint16_t get_file_num(uint8_t *data, struct fatstruct *info) {
 		}
 		/* Convert 3 byte ASCII file number suffix to integer */
 		if (data[j] != DTEDEL) {
-			uint16_t first_digit = data[j+4] - 0x30;
-			if (first_digit <= 9) {
-				uint16_t second_digit = data[j+5] - 0x30;
-				if (second_digit <= 9) {
-					uint16_t third_digit = data[j+6] - 0x30;
-					if (third_digit <= 9) {
-						/* Current file number suffix */
-						uint16_t num = (first_digit * 100) + (second_digit * 10) + third_digit;
-						/* Keep track of highest file number suffix */
-						if (num > max) {
-							max = num;
+			uint8_t k = file_name_match_end(file_name, data, j);
+			if (k > 0) {
+				uint16_t first_digit = data[k] - 0x30;
+				if (first_digit <= 9) {
+					uint16_t second_digit = data[++k] - 0x30;
+					if (second_digit <= 9) {
+						uint16_t third_digit = data[++k] - 0x30;
+						if (third_digit <= 9) {
+							/* Current file number suffix */
+							uint16_t num = (first_digit * 100) + (second_digit * 10) + third_digit;
+							/* Keep track of highest file number suffix */
+							if (num > max) {
+								max = num;
+							}
 						}
 					}
 				}
 			}
-			/* Update byte counter */
-			i += 32;
-			/* Address of next directory table entry */
-			j = i % info->nbytesinsect;
 		}
+		/* Update byte counter */
+		i += 32;
+		/* Address of next directory table entry */
+		j = i % info->nbytesinsect;
 	} while (i < info->dtsize && data[j] != 0x00);
 	
 	/* Return the highest usable file number suffix */
 	return max + 1;
+}
+
+uint8_t file_name_match_end(const uint8_t *file_name, const uint8_t *string, uint32_t offset) {
+	uint8_t i = 0;
+	while (file_name[i] != '\0' && i < MAX_FILE_NAME) {
+		if (file_name[i] != string[offset + i]) {
+			return 0;
+		}
+		++i;
+	}
+	return offset + i;
 }
 
 #endif

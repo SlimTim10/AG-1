@@ -70,7 +70,8 @@ enum {
 	BLKSIZE = 512,	/* Block size (in bytes) */
 	DTE_PER_BLK = 16,	/* Directory table entries per block */
 	DTESIZE = 32,	/* Directory table entry size (in bytes) */
-	DTEDEL = 0xE5	/* Directory table entry has been deleted */
+	DTEDEL = 0xE5,	/* Directory table entry has been deleted */
+	MAX_FILE_NAME = 5 /* Maximum length of file name (+3 chars for file num) */
 };
 
 enum FATErrCodes {
@@ -109,7 +110,7 @@ uint16_t find_cluster(uint8_t *data, struct fatstruct *info);
 uint32_t get_cluster_offset(uint16_t clust, struct fatstruct *info);
 uint8_t valid_block(uint8_t block, struct fatstruct *info);
 uint8_t update_fat(uint8_t *data, struct fatstruct *info, uint16_t index, uint16_t num);
-uint8_t update_dir_table(uint8_t *data, struct fatstruct *info, uint16_t cluster, uint32_t file_size);
+uint8_t update_dir_table(uint8_t *data, struct fatstruct *info, uint16_t cluster, uint32_t file_size, uint8_t *file_name, uint16_t file_num);
 uint8_t valid_boot_sector(uint8_t *data, struct fatstruct *boot);
 uint8_t parse_boot_sector(uint8_t *data, struct fatstruct *info);
 void delete_file(uint8_t, uint32_t, uint8_t *data, struct fatstruct *info);
@@ -119,6 +120,6 @@ void format_sd(uint8_t *data, struct fatstruct *info, void (*pre_format)(), void
  * Scan through directory table for highest file number suffix and return the
  * next highest number.
  */
-uint16_t get_file_num(uint8_t *data, struct fatstruct *info);
+uint16_t get_file_num(uint8_t *data, const struct fatstruct *info, const uint8_t *file_name);
 
 #endif

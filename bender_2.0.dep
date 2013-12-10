@@ -6,8 +6,8 @@
   <configuration>
     <name>Debug</name>
     <outputs>
-      <file>$PROJ_DIR$\Debug\Obj\accelbuffer.r43</file>
       <file>$TOOLKIT_DIR$\inc\dlib\c\stdbool.h</file>
+      <file>$PROJ_DIR$\Debug\Obj\accelbuffer.r43</file>
       <file>$PROJ_DIR$\accelbuffer.c</file>
       <file>$PROJ_DIR$\buttonbuffer.c</file>
       <file>$PROJ_DIR$\accelbuffer.h</file>
@@ -31,9 +31,9 @@
       <file>$PROJ_DIR$\spi.h</file>
       <file>$PROJ_DIR$\util.c</file>
       <file>$PROJ_DIR$\util.h</file>
-      <file>$PROJ_DIR$\Debug\Obj\bender_2.pbd</file>
-      <file>$PROJ_DIR$\Debug\Obj\spi.pbi</file>
       <file>$PROJ_DIR$\Debug\Obj\sdfat.r43</file>
+      <file>$PROJ_DIR$\Debug\Obj\spi.pbi</file>
+      <file>$PROJ_DIR$\Debug\Obj\bender_2.pbd</file>
       <file>$PROJ_DIR$\Debug\Obj\util.pbi</file>
       <file>$TOOLKIT_DIR$\inc\dlib\c\xencoding_limits.h</file>
       <file>$TOOLKIT_DIR$\inc\msp430f5310.h</file>
@@ -86,17 +86,17 @@
         </tool>
         <tool>
           <name>ICC430</name>
-          <file> 0</file>
+          <file> 1</file>
         </tool>
       </outputs>
       <inputs>
         <tool>
           <name>BICOMP</name>
-          <file> 4 50 31 53 48 44 29 42 1</file>
+          <file> 4 50 31 53 48 44 29 42 0</file>
         </tool>
         <tool>
           <name>ICC430</name>
-          <file> 4 50 31 53 48 37 44 29 42 1</file>
+          <file> 4 50 31 53 48 37 44 29 42 0</file>
         </tool>
       </inputs>
     </file>
@@ -115,11 +115,11 @@
       <inputs>
         <tool>
           <name>BICOMP</name>
-          <file> 5 50 31 53 48 44 29 42 1</file>
+          <file> 5 50 31 53 48 44 29 42 0</file>
         </tool>
         <tool>
           <name>ICC430</name>
-          <file> 5 50 31 53 48 37 44 29 42 1</file>
+          <file> 5 50 31 53 48 37 44 29 42 0</file>
         </tool>
       </inputs>
     </file>
@@ -207,11 +207,11 @@
       <inputs>
         <tool>
           <name>BICOMP</name>
-          <file> 30 41 52 50 31 53 48 44 29 42 1 22 20 12 10 24 18 7 16 4 5</file>
+          <file> 30 41 52 50 31 53 48 44 29 42 0 22 20 12 10 24 18 7 16 4 5</file>
         </tool>
         <tool>
           <name>ICC430</name>
-          <file> 30 41 52 50 31 53 48 37 44 29 42 1 22 20 12 10 24 18 7 16 4 5</file>
+          <file> 30 41 52 50 31 53 48 37 44 29 42 0 22 20 12 10 24 18 7 16 4 5</file>
         </tool>
       </inputs>
     </file>
@@ -247,7 +247,7 @@
         </tool>
         <tool>
           <name>ICC430</name>
-          <file> 27</file>
+          <file> 25</file>
         </tool>
       </outputs>
       <inputs>
@@ -327,7 +327,7 @@
       <inputs>
         <tool>
           <name>XLINK</name>
-          <file> 46 43 49 51 0 59 35 32 33 27 47 34 38</file>
+          <file> 46 43 49 51 1 59 35 32 33 25 47 34 38</file>
         </tool>
       </inputs>
     </file>

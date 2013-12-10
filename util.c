@@ -480,8 +480,11 @@ uint16_t substring_to_uint16_t(const struct substring *const substring) {
 }
 
 Bool same(const uint8_t *const string, const struct substring *const substring) {
-	/* Make sure string is no longer than substring */
-	if (string[substring->length] != '\0') { /* provided string is NULL terminated */
+	/* 
+	 * Make sure string is no longer than substring provided string 
+	 * is NULL terminated
+	 */
+	if (string[substring->length] != '\0') {
 		return FALSE;
 	}
 	/* Make sure no characters in substring differ from string for the same index */

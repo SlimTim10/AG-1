@@ -26,6 +26,7 @@ uint8_t read_addr_accel(uint8_t address);
 void write_addr_accel(uint8_t address, uint8_t d);
 uint8_t accel_int(void);
 uint8_t range_bits_accel(uint16_t n);
+uint8_t range_bits_to_g_accel(uint8_t n);
 uint8_t bandwidth_bits_accel(uint16_t n);
 
 #endif
