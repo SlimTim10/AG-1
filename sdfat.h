@@ -105,7 +105,7 @@ uint8_t send_cmd_sd(SDcmd cmd, uint32_t arg);
 uint8_t send_acmd_sd(SDcmd acmd, uint32_t arg);
 /* uint8_t write_multiple_block(uint32_t start_offset); */
 uint8_t write_block(uint8_t *data, uint32_t offset, uint16_t count);
-uint8_t read_block(uint8_t *data, uint32_t offset);
+uint8_t read_block(uint8_t *data, uint32_t offset, enum SDTimeout timeout);
 uint16_t find_cluster(uint8_t *data, struct fatstruct *info);
 uint32_t get_cluster_offset(uint16_t clust, struct fatstruct *info);
 uint8_t valid_block(uint8_t block, struct fatstruct *info);

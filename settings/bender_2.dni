@@ -27,7 +27,7 @@ NextState1=0
 Break=7
 State Storage=0
 [DebugChecksum]
-Checksum=224239808
+Checksum=-1703911607
 [DisAssemblyWindow]
 NumStates=_ 1
 State 1=_ 1
@@ -46,17 +46,14 @@ TriggerName=main
 LimitSize=0
 ByteLimit=50
 [Breakpoints]
-Bp0=_ "STD_CODE" "{$PROJ_DIR$\main.c}.989.3@1" 0 0 0 0 "" 0 ""
-Bp1=_ "STD_CODE" "{$PROJ_DIR$\sdfat.c}.387.3@1" 0 0 0 0 "" 0 ""
-Bp2=_ "STD_CODE" "{$PROJ_DIR$\sdfat.c}.402.3@1" 0 0 0 0 "" 0 ""
-Bp3=_ "STD_CODE" "{$PROJ_DIR$\sdfat.c}.411.3@1" 0 0 0 0 "" 0 ""
-Bp4=_ "STD_CODE" "{$PROJ_DIR$\main.c}.533.2@1" 0 0 0 0 "" 0 ""
-Bp5=_ "STD_CODE" "{$PROJ_DIR$\main.c}.551.2@1" 1 0 0 0 "" 0 ""
-Bp6=_ "STD_CODE" "{$PROJ_DIR$\main.c}.628.12@1" 0 0 0 0 "" 0 ""
-Bp7=_ "STD_CODE" "{$PROJ_DIR$\main.c}.1278.3@1" 1 0 0 0 "" 0 ""
-Bp8=_ "STD_CODE" "{$PROJ_DIR$\main.c}.991.13@1" 0 0 0 0 "" 0 ""
-Bp9=_ "STD_CODE" "{$PROJ_DIR$\main.c}.1265.3@1" 1 0 0 0 "" 0 ""
-Count=10
+Bp0=_ "STD_CODE" "{$PROJ_DIR$\main.c}.917.3@1" 0 0 0 0 "" 0 ""
+Bp1=_ "STD_CODE" "{$PROJ_DIR$\sdfat.c}.454.10@1" 0 0 0 0 "" 0 ""
+Bp2=_ "STD_CODE" "{$PROJ_DIR$\main.c}.533.2@1" 0 0 0 0 "" 0 ""
+Bp3=_ "STD_CODE" "{$PROJ_DIR$\main.c}.551.2@1" 1 0 0 0 "" 0 ""
+Bp4=_ "STD_CODE" "{$PROJ_DIR$\main.c}.1209.3@1" 0 0 0 0 "" 0 ""
+Bp5=_ "STD_CODE" "{$PROJ_DIR$\main.c}.1200.7@1" 0 0 0 0 "" 0 ""
+Bp6=_ "STD_CODE" "{$PROJ_DIR$\sdfat.c}.322.3@1" 1 0 0 0 "" 0 ""
+Count=7
 [FET]
 Clock mode=14
 Extended Clock mode=-1
@@ -91,6 +88,6 @@ SuppressDialog=0
 Enabled=0
 [DriverProfiling]
 Enabled=0
-Mode=846357860
+Mode=737673728
 Graph=0
 Symbiont=0

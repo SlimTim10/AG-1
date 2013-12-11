@@ -190,7 +190,7 @@ void get_user_config(uint8_t *data, struct fatstruct *info) {
 	uint32_t config_file_offset = 0; // Offset of first block with file's data
 	
 	/* Read first block of directory table */
-	read_block(data, info->dtoffset);
+	read_block(data, info->dtoffset, SD_LONG_TIMEOUT);
 
 	/* Find config.ini file in directory table */
 	for (	i = 0;
@@ -198,7 +198,7 @@ void get_user_config(uint8_t *data, struct fatstruct *info) {
 			config_file_offset == 0 &&
 			data[0] != 0x00;
 			i += 512) {
-		read_block(data, info->dtoffset + i);
+		read_block(data, info->dtoffset + i, SD_LONG_TIMEOUT);
 		for (j = 0; j < 512; j += 32) {
 			/* Deleted file */
 			if (data[j] == 0xE5) continue;
@@ -243,7 +243,7 @@ void get_config_values(uint8_t *data, uint32_t block_offset) {
 	uint8_t col_idx = 0;
 
 	/* Read the first block */
-	read_block(data, block_offset);
+	read_block(data, block_offset, SD_LONG_TIMEOUT);
 	
 	/* 
 	 * Parse file until end.
@@ -259,7 +259,7 @@ void get_config_values(uint8_t *data, uint32_t block_offset) {
 			/* Update the block offset */
 			block_offset += BLOCK_SIZE;
 			/* Read the next block into data[] */
-			read_block(data, block_offset);
+			read_block(data, block_offset, SD_LONG_TIMEOUT);
 			/* Reset the counter */
 			i = 0;
 		} else {

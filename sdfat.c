@@ -129,7 +129,8 @@ void go_idle_sd() {
  * Send command and return error code. Return zero for OK
  */
 uint8_t send_cmd_sd(SDcmd cmd, uint32_t arg) {
-	spia_send(cmd | BIT6);	/* Send command */
+	/* Send command */
+	spia_send(cmd | BIT6);
 	
 	/* Send argument */
 	for (int8_t s = 24; s >= 0; s -= 8) {
@@ -176,15 +177,19 @@ void wait_notbusy(void) {
 /*
  * Wait for Start Block token
  */
-uint8_t wait_startblock(void) {
+uint8_t wait_startblock(enum SDTimeout timeout) {
 	/* Wait until ready */
 	uint8_t rec = spia_rec();
-	while (rec == SD_BLOCK_ERR) {
+	for (uint16_t i = 0; (i < timeout) && (rec == SD_BLOCK_ERR); ++i) {
 		rec = spia_rec();
 	}
 	/* Start Block token received */
 	if (rec == SD_START_BLOCK) {
 		return SD_SUCCESS;
+	}
+	/* Timed-out */
+	if (rec == SD_BLOCK_ERR) {
+		return SD_TIMEOUT;
 	}
 	/* Error */
 	return SD_BAD_TOKEN;
@@ -287,7 +292,7 @@ uint8_t write_block(uint8_t *data, uint32_t offset, uint16_t count) {
 /*
  * Read 512 bytes from offset and store them in the given data buffer
  */
-uint8_t read_block(uint8_t *data, uint32_t offset) {
+uint8_t read_block(uint8_t *data, uint32_t offset, enum SDTimeout timeout) {
 	SD_SELECT();
 	
 	/* READ_SINGLE_BLOCK command with offset as argument */
@@ -298,7 +303,7 @@ uint8_t read_block(uint8_t *data, uint32_t offset) {
 	}
 
 	/* Wait for the start of the block */
-	if (wait_startblock()) {
+	if (wait_startblock(timeout)) {
 		SD_DESELECT();
 		return SD_TIMEOUT;
 	}
@@ -328,8 +333,10 @@ uint16_t find_cluster(uint8_t *data, struct fatstruct *info) {
 		/* Read each new block of the FAT */
 		if (j == 0) {
 			block_offset = info->fatoffset + i;
-			if (read_block(data, block_offset)) {
-				return 0;
+			if (read_block(data, block_offset, SD_LONG_TIMEOUT)) {
+				/* Couldn't read this block so skip it */
+				i += (BLKSIZE - 2);
+				continue;
 			}
 		}
 		
@@ -383,9 +390,8 @@ uint8_t update_fat(uint8_t *data, struct fatstruct *info, uint16_t index, uint16
 	
 	/* Read the right block of the FAT  */
 	{
-		uint8_t err = read_block(data, block_offset);
+		uint8_t err = read_block(data, block_offset, SD_LONG_TIMEOUT);
 		if (err) {
-			err++;
 			return err;
 		}
 	}
@@ -400,7 +406,6 @@ uint8_t update_fat(uint8_t *data, struct fatstruct *info, uint16_t index, uint16
 	{
 		uint8_t err = write_block(data, block_offset, 512);
 		if (err) {
-			err++;
 			return err;
 		}
 	}
@@ -409,7 +414,6 @@ uint8_t update_fat(uint8_t *data, struct fatstruct *info, uint16_t index, uint16
 	if (info->nfats > 1) {
 		uint8_t err = write_block(data, block_offset + info->fatsize, 512);
 		if (err) {
-			err++;
 			return err;
 		}
 	}
@@ -431,11 +435,7 @@ uint8_t update_fat(uint8_t *data, struct fatstruct *info, uint16_t index, uint16
  * file_name: file name prefix (truncated if greater than
  * file_num: file name number suffix
  */
-/* TODO parameter to specify whether ACCL or GYRO file name and parameter for file number */
 uint8_t update_dir_table(uint8_t *data, struct fatstruct *info, uint16_t cluster, uint32_t file_size, uint8_t *file_name, uint16_t file_num) {
-
-	uint8_t err;
-
 	/* Directory table entry (MUST BE 32 BYTES) */
 	uint8_t dte[] = "DATA000 CSV\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
 		"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00";
@@ -447,7 +447,11 @@ uint8_t update_dir_table(uint8_t *data, struct fatstruct *info, uint16_t cluster
 		j = i % info->nbytesinsect;
 		if (j == 0) {
 			/* Next sector */
-			if (err = read_block(data, info->dtoffset + i)) return err;
+			if (read_block(data, info->dtoffset + i, SD_LONG_TIMEOUT)) {
+				/* Couldn't read this block so skip it */
+				i += (info->nbytesinsect - 32);
+				continue;
+			}
 		}
 		
 		/* Check for empty entry (not deleted file (0xE5 prefix)) */
@@ -462,7 +466,11 @@ uint8_t update_dir_table(uint8_t *data, struct fatstruct *info, uint16_t cluster
 			j = i % info->nbytesinsect;
 			if (j == 0) {
 				/* Next sector */
-				if (err = read_block(data, info->dtoffset + i)) return err;
+				if (read_block(data, info->dtoffset + i, SD_LONG_TIMEOUT)) {
+					/* Couldn't read this block so skip it */
+					i += (info->nbytesinsect - 32);
+					continue;
+				}
 			}
 			
 			/* Check for deleted file (0xE5 prefix) */
@@ -526,7 +534,7 @@ uint8_t valid_boot_sector(uint8_t *data, struct fatstruct *boot) {
 	boot->bootoffset = 0;
 	/* Read first sector */
 	{
-		uint8_t err = read_block(data, 0);
+		uint8_t err = read_block(data, 0, SD_LONG_TIMEOUT);
 		if (err) {
 			return err;
 		}
@@ -540,7 +548,7 @@ uint8_t valid_boot_sector(uint8_t *data, struct fatstruct *boot) {
 		/* Location of boot sector */
 		boot->bootoffset = boot->nhidsects * 512;
 		/* Read boot sector and store in data buffer */
-		uint8_t err = read_block(data, boot->bootoffset);
+		uint8_t err = read_block(data, boot->bootoffset, SD_LONG_TIMEOUT);
 		if (err) {
 			return err;
 		}
@@ -618,7 +626,7 @@ uint8_t parse_boot_sector(uint8_t *data, struct fatstruct *info) {
  * Free cluster chain in FAT.
  * In directory table, mark file as deleted (0xE5).
  */
-void delete_file(	uint8_t dten, uint32_t curoffset, uint8_t *data, struct fatstruct *info) {
+void delete_file(uint8_t dten, uint32_t curoffset, uint8_t *data, struct fatstruct *info) {
 
 	/* Get offset of directory table entry (relative to directory table) */
 	uint16_t dte_offset = dten * 32;
@@ -633,7 +641,7 @@ void delete_file(	uint8_t dten, uint32_t curoffset, uint8_t *data, struct fatstr
 		if (cluster >= 256) {
 			block_offset += (cluster * 2) % 512;
 		}
-		read_block(data, block_offset);
+		read_block(data, block_offset, SD_LONG_TIMEOUT);
 
 		uint16_t i = (cluster % 256) * 2;	/* Index of cluster */
 		cluster = BTOW(data[i], data[i+1]);	/* Get next cluster in chain */
@@ -642,7 +650,7 @@ void delete_file(	uint8_t dten, uint32_t curoffset, uint8_t *data, struct fatstr
 		write_block(data, block_offset, 512);
 	}
 
-	read_block(data, curoffset);
+	read_block(data, curoffset, SD_LONG_TIMEOUT);
 	data[dte_offset+0] = 0xE5;	/* Mark directory table entry as deleted */
 	write_block(data, curoffset, 512);
 }
@@ -762,7 +770,7 @@ void format_sd(uint8_t *data, struct fatstruct *info, void (*pre_format)(), void
 	uint32_t dt_end = info->dtoffset + info->dtsize;
 	for (uint32_t j = info->dtoffset; j < dt_end; j += 512) {
 		if (!config_found) {	/* Look for config file */
-			read_block(data, j);
+			read_block(data, j, SD_LONG_TIMEOUT);
 			/* Clear this block */
 			write_block(data, j, 0);
 			for (uint16_t i = 0; i < 512; i += 32) {
@@ -809,13 +817,15 @@ uint16_t get_file_num(uint8_t *data, const struct fatstruct *info, const uint8_t
 	/* Directory table entry address */
 	uint32_t j = 0;
 	
-	/* TODO */
+	/* TODO desc */
 	do {
 		/* Check for end of sector */
 		if (i % info->nbytesinsect == 0) {
 			/* Read next sector */
-			if (read_block(data, info->dtoffset + i)) {
-				return 1;
+			if (read_block(data, info->dtoffset + i, SD_LONG_TIMEOUT)) {
+				/* Couldn't read this block so skip it */
+				i += info->nbytesinsect;
+				continue;
 			}
 			j = 0;
 		}

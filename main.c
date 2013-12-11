@@ -168,12 +168,11 @@ enum ButtonPress wait_for_ctrl(void);
  * Define global variables
  */
 #ifdef DEBUG
-uint32_t debug_int = 0;
 bool debug_hit = false;
 #endif
 
 /* High byte for continuous timer */
-uint32_t time_cont;
+uint8_t time_cont;
 
 /* Time of last sample for getting delta timestamp for acceleration data for new sample */
 uint32_t timestamp_accel;
@@ -1174,13 +1173,13 @@ bool button_press_event_handled(void) {
 
 bool accel_sample_event_handled(void) {
 	/* Get the timestamp */
-	uint32_t timestamp = (time_cont << 16) + TA0R;
+	uint32_t timestamp = time_cont;
+	timestamp <<= 16;
+	timestamp += TA0R;
 	/* Let the timer interrupt run first and then capture sample */
 	if (timer_interrupt_triggered()) {
-		debug_int = 0;
 		return false;
 	}
-	++debug_int;
 	/* Calculate the delta timestamp for sample data using previous sample's timestamp */
 	uint32_t delta_time;
 	if (timestamp_accel <= timestamp) {
@@ -1188,12 +1187,6 @@ bool accel_sample_event_handled(void) {
 	} else {
 		delta_time = timestamp + (0x1000000 - timestamp_accel);
 	}
-#ifdef DEBUG
-	if (delta_time > 21000) {
-		delta_time++;
-		HANG();
-	}
-#endif
 	/* Put the accelerometer sample data in the buffer */
 	bool success = add_accel_sample(&accel_sample_buffer, delta_time,
 		read_addr_accel(ACCEL_OUTX_H), read_addr_accel(ACCEL_OUTX_L),
