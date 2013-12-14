@@ -1773,12 +1773,6 @@
     </settings>
   </configuration>
   <file>
-    <name>$PROJ_DIR$\accelbuffer.c</name>
-  </file>
-  <file>
-    <name>$PROJ_DIR$\accelbuffer.h</name>
-  </file>
-  <file>
     <name>$PROJ_DIR$\buttonbuffer.c</name>
   </file>
   <file>
@@ -1822,6 +1816,12 @@
   </file>
   <file>
     <name>$PROJ_DIR$\msp430f5310_extra.h</name>
+  </file>
+  <file>
+    <name>$PROJ_DIR$\samplebuffer.c</name>
+  </file>
+  <file>
+    <name>$PROJ_DIR$\samplebuffer.h</name>
   </file>
   <file>
     <name>$PROJ_DIR$\sdfat.c</name>

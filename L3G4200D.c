@@ -140,6 +140,19 @@ uint8_t range_bits_gyro(uint16_t n) {
 }
 
 /*----------------------------------------------------------------------------*/
+/* Return gyroscope range in dps corresponding to range bits				  */
+/*----------------------------------------------------------------------------*/
+uint16_t range_bits_to_dps_gyro(uint8_t n) {
+	if (n == 0) {
+		return 250;
+	} else if (n == 1) {
+		return 500;
+	} else {
+		return 2000;
+	}
+}
+
+/*----------------------------------------------------------------------------*/
 /* Return gyroscope bandwidth bits corresponding to bandwidth n				  */
 /*----------------------------------------------------------------------------*/
 uint8_t bandwidth_bits_gyro(uint16_t n) {

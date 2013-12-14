@@ -31,7 +31,7 @@
 #define BLOCK_SIZE 512
 
 /* Max line length for a property (key-value pair or key only) */
-#define MAX_PROP_LENGTH 80
+#define MAX_PROP_LENGTH 50
 
 /* The size of one FAT16 cluster (32KB) */
 #define MAX_FILE_SIZE 0x8000

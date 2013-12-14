@@ -95,8 +95,8 @@ uint8_t init_sd(void) {
 	for (uint8_t n = 0; n < 4; n++) {
 		ocr[n] = spia_rec();
 	}
+	
 	/* SD 2.0 (HC or not) */
-	/* TODO I don't get the point of this since this will always return SD_SUCCESS? */
 	enum SDCardType ct = (ocr[0] & BIT6) ? CT_SDHC : CT_SD2;
 
 	SD_DESELECT();

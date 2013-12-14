@@ -146,4 +146,19 @@ uint8_t bandwidth_bits_accel(uint16_t n) {
 	}
 }
 
+/*----------------------------------------------------------------------------*/
+/* Return accelerometer bandwidth in hz corresponding to bandwidth bits		  */
+/*----------------------------------------------------------------------------*/
+uint16_t bandwidth_bits_to_hz_accel(uint8_t n) {
+	if (n == 0) {
+		return 40;
+	} else if (n == 1) {
+		return 160;
+	} else if (n == 2) {
+		return 640;
+	} else if (n == 3) {
+		return 2560;
+	}
+}
+
 #endif

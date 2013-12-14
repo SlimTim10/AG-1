@@ -25,8 +25,7 @@ void set_key_value_settings(struct Setting *_key_value_settings, uint8_t _num_ke
 void set_key_only_settings(struct Setting *_key_only_settings, uint8_t _num_key_only_settings);
 
 /*
- * Find and parse config.ini file and set configuration values (range,
- * bandwidth)
+ * Find and parse config.ini file and set configuration values (range, bandwidth)
  */
 void get_user_config(uint8_t *data, struct fatstruct *info);
 

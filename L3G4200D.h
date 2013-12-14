@@ -26,6 +26,7 @@ uint8_t read_addr_gyro(uint8_t address);
 void write_addr_gyro(uint8_t address, uint8_t d);
 uint8_t gyro_int(void);
 uint8_t range_bits_gyro(uint16_t n);
+uint16_t range_bits_to_dps_gyro(uint8_t n);
 uint8_t bandwidth_bits_gyro(uint16_t n);
 
 #endif

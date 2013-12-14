@@ -28,5 +28,6 @@ uint8_t accel_int(void);
 uint8_t range_bits_accel(uint16_t n);
 uint8_t range_bits_to_g_accel(uint8_t n);
 uint8_t bandwidth_bits_accel(uint16_t n);
+uint16_t bandwidth_bits_to_hz_accel(uint8_t n);
 
 #endif

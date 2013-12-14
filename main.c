@@ -13,7 +13,7 @@
 #include "msp430f5310_extra.h"
 #include "circuit.h"
 #include "main.h"
-#include "accelbuffer.h"
+#include "samplebuffer.h"
 #include "buttonbuffer.h"
 
 /* Uncomment for easier debugging */
@@ -24,8 +24,7 @@
 #define FIRMWARE_VERSION		"20131225"
 
 /* Name of log files (max. 5 chars) */
-#define ACCELEROMETER_FILE_NAME	"ACCL"
-#define GYROSCOPE_FILE_NAME		"GYRO"
+#define FILE_NAME	"DATA"
 
 /* DCO speed (MHz) */
 #define CLOCK_SPEED		12
@@ -41,8 +40,8 @@
 
 /* Size of data buffers */
 /*** TODO NOTE 4660 bytes available to use ***/
-/* 1.5KB */
-enum { RAW_SAMPLE_BUFF_SIZE = 150 };
+/* 3.2KB */
+enum { RAW_SAMPLE_BUFF_SIZE = 250 };
 
 /* Should be a multiple of SD card write block (512B) */
 enum { SD_SAMPLE_BUFF_SIZE = 512 };
@@ -113,9 +112,7 @@ void power_on_gyroscope(void);
 void power_off_gyroscope(void);
 void enable_button_pressing(bool enable_triple_tap);
 void enable_accelerometer_sampling(void);
-void enable_gyroscope_sampling(void);
 void accelerometer_empty_read(void);
-void gyroscope_empty_read(void);
 bool voltage_is_low(void);
 
 /* Flash LED multiple times quickly to show "panic" */
@@ -138,8 +135,6 @@ enum DeviceState format_step(void);
 void init_sd_card(void);
 void format_sd_card(void);
 void new_sd_card_file(struct SdCardBuffer *const sd_card_buffer);
-void new_accel_sd_card_file(struct SdCardBuffer *const sd_card_buffer);
-void new_gyro_sd_card_file(struct SdCardBuffer *const sd_card_buffer);
 void add_firmware_info_to_sd_card_file(struct SdCardBuffer *const sd_card_buffer);
 uint32_t get_block_offset(const struct SdCardBuffer *const sd_card_buffer);
 bool add_value_to_buffer(struct SdCardBuffer *const sd_card_buffer, uint8_t value);
@@ -151,8 +146,7 @@ bool write_full_buffer_to_sd_card(struct SdCardBuffer *const sd_card_buffer);
 bool write_remaining_buffer_to_sd_card(struct SdCardBuffer *const sd_card_buffer);
 void get_config_settings(void);
 bool button_press_event_handled(void);
-bool accel_sample_event_handled(void);
-bool gyro_sample_event_handled(void);
+bool sample_event_handled(void);
 bool timer_interrupt_triggered(void);
 void clear_timer_interrupt(void);
 bool button_interrupt_triggered(void);
@@ -168,6 +162,7 @@ enum ButtonPress wait_for_ctrl(void);
  * Define global variables
  */
 #ifdef DEBUG
+uint32_t debug_int = 0;
 bool debug_hit = false;
 #endif
 
@@ -177,11 +172,11 @@ uint8_t time_cont;
 /* Time of last sample for getting delta timestamp for acceleration data for new sample */
 uint32_t timestamp_accel;
 
-/* Buffer for accelerometer samples */
-struct AccelSampleBuffer accel_sample_buffer;
+/* Buffer for samples */
+struct SampleBuffer sample_buffer;
 
-/* Samples for buffer of accelerometer samples */
-struct AccelSample accel_samples[RAW_SAMPLE_BUFF_SIZE];
+/* Samples for buffer */
+struct Sample samples[RAW_SAMPLE_BUFF_SIZE];
 
 /* Buffer for button presses */
 struct ButtonPressBuffer button_press_buffer;
@@ -196,10 +191,7 @@ bool triple_tap_enabled;
 struct fatstruct fatinfo;
 
 /* Buffer for accelerometer sample data to write to SD card */
-struct SdCardBuffer accel_sd_buff;
-
-/* Buffer for gyroscope sample data to write to SD card */
-struct SdCardBuffer gyro_sd_buff;
+struct SdCardBuffer sd_buff;
 
 /* Temporary variable for initializing the SD card using an SdCardBuffer's buffer */
 uint8_t *data_sd;
@@ -326,8 +318,6 @@ void power_on_gyroscope(void) {
 }
 
 void power_off_gyroscope(void) {
-	/* So gyroscope interrupt is low */
-	gyroscope_empty_read();
 	power_down_gyro();
 	power_off(GYRO_PWR);
 }
@@ -341,15 +331,8 @@ void enable_button_pressing(bool enable_triple_tap) {
 }
 
 void enable_accelerometer_sampling(void) {
-	clear_accel_sample_buffer(&accel_sample_buffer);
 	activate_accel_interrupt();
 	set_int_accel();
-}
-
-void enable_gyroscope_sampling(void) {
-	// TODO clear_gyro_sample_buffer(&gyro_sample_buffer);
-	activate_gyro_interrupt();
-	set_int_gyro();
 }
 
 // TODO possibly use set_int_accel() / clear_int_accel() instead?
@@ -360,16 +343,6 @@ void accelerometer_empty_read(void) {
 	read_addr_accel(ACCEL_OUTY_L);
 	read_addr_accel(ACCEL_OUTZ_H);
 	read_addr_accel(ACCEL_OUTZ_L);
-}
-
-// TODO possibly use set_int_gyro() / clear_int_gyro() instead?
-void gyroscope_empty_read(void) {
-	read_addr_gyro(GYRO_OUTX_H);
-	read_addr_gyro(GYRO_OUTX_L);
-	read_addr_gyro(GYRO_OUTY_H);
-	read_addr_gyro(GYRO_OUTY_L);
-	read_addr_gyro(GYRO_OUTZ_H);
-	read_addr_gyro(GYRO_OUTZ_L);
 }
 
 bool voltage_is_low(void) {
@@ -439,10 +412,10 @@ int main(void) {
 
 void init(void) {
 	/* Construct data buffers */
-	construct_accel_sample_buffer(&accel_sample_buffer, accel_samples, RAW_SAMPLE_BUFF_SIZE);
+	construct_sample_buffer(&sample_buffer, samples, RAW_SAMPLE_BUFF_SIZE);
 	construct_button_press_buffer(&button_press_buffer, button_presses, BUTTON_BUFF_SIZE);
 	/* Point pointer to buffer */
-	data_sd = accel_sd_buff.buffer;
+	data_sd = sd_buff.buffer;
 	/* Watchdog timer is on by default */
 	stop_watchdog();
 	/* Set up and configure the clock */
@@ -500,17 +473,17 @@ enum DeviceState start_logging(void) {
 	get_config_settings();
 	disable_interrupts();
 	enable_button_pressing(false);
-	/* Power on logging devices, clear their buffers, and activate their interrupts */
+	/* Power on logging devices and activate interrupts */
 	if (accelerometer.is_enabled) {
 		power_on_accelerometer();
 		enable_accelerometer_sampling();
-		new_accel_sd_card_file(&accel_sd_buff);
+		new_sd_card_file(&sd_buff);
 	}
 	if (gyroscope.is_enabled) {
 		power_on_gyroscope();
-		enable_gyroscope_sampling();
-		new_gyro_sd_card_file(&gyro_sd_buff);
 	}
+	/* Clear raw samples buffer */
+	clear_sample_buffer(&sample_buffer);
 	/* Reset timer */
 	time_cont = 0;
 	/* Reset time of last sample */
@@ -529,35 +502,17 @@ enum DeviceState stop_logging(void) {
 		power_off_gyroscope();
 	}
 	/* Write final logger data in buffer and update the directory table */
-	if (accelerometer.is_enabled) {
-		write_remaining_buffer_to_sd_card(&accel_sd_buff);
-		/* Name of accelerometer log file */
-		uint8_t accelerometer_file_name[] = ACCELEROMETER_FILE_NAME;
+	{
+		write_remaining_buffer_to_sd_card(&sd_buff);
+		/* Name of log file */
+		uint8_t file_name[] = FILE_NAME;
 		/* Get the number of the last log file */
-		uint16_t file_num = get_file_num(accel_sd_buff.buffer, &fatinfo, accelerometer_file_name);
-		if (update_dir_table(accel_sd_buff.buffer, 
+		uint16_t file_num = get_file_num(sd_buff.buffer, &fatinfo, file_name);
+		if (update_dir_table(sd_buff.buffer, 
 									&fatinfo, 
-									accel_sd_buff.start_cluster, 
-									accel_sd_buff.size,
-									accelerometer_file_name,
-									file_num) != FAT_SUCCESS) {
-#ifdef DEBUG
-			HANG();
-#endif
-			// TODO logging error
-		}
-	}
-	if (gyroscope.is_enabled) {
-		write_remaining_buffer_to_sd_card(&gyro_sd_buff);
-		/* Name of gyroscope log file */
-		uint8_t gyroscope_file_name[] = GYROSCOPE_FILE_NAME;
-		/* Get the number of the last log file */
-		uint16_t file_num = get_file_num(accel_sd_buff.buffer, &fatinfo, gyroscope_file_name);
-		if (update_dir_table(gyro_sd_buff.buffer,
-									&fatinfo,
-									gyro_sd_buff.start_cluster,
-									gyro_sd_buff.size,
-									gyroscope_file_name,
+									sd_buff.start_cluster, 
+									sd_buff.size,
+									file_name,
 									file_num) != FAT_SUCCESS) {
 #ifdef DEBUG
 			HANG();
@@ -631,34 +586,44 @@ enum DeviceState log_step(void) {
 				break;
 		}
 	}
-	/* Process accelerometer samples */
-	if (accelerometer.is_enabled) {
-		// TODO refactor this to its own function but for now...
-		/* Convert all current samples in raw buffer to ascii */
-		uint16_t count = accel_sample_buffer.count;
-		for (uint16_t i = 0; i < count; ++i) {
-			/* Grab a raw accelerometer sample */
-			struct AccelSample accel_sample;
-			bool success = remove_accel_sample(&accel_sample_buffer, &accel_sample);
-			if (!success) {
+	
+	/* Process samples */
+	// TODO refactor this to its own function but for now...
+	/* Convert all current samples in raw buffer to ascii */
+	uint16_t count = sample_buffer.count;
 #ifdef DEBUG
-				HANG();
+	if (count == 0) {
+		led_1_off();
+	} else if (count == RAW_SAMPLE_BUFF_SIZE) {
+		led_1_on();
+	} else {
+		led_1_toggle();
+	}
 #endif
-			} else {
-				// TODO dear god, refactor this...
-				/* Convert delta time to ascii and put in SD card buffer */
-				{
-					/* Max timestamp value is 6 digits */
-					uint8_t ascii_buffer[6];
-					itoa(accel_sample.delta_time, ascii_buffer);
-					for (uint8_t i = 0; ascii_buffer[i] != NULL_TERMINATOR && i < 6; ++i) {
-						if (!add_value_to_buffer(&accel_sd_buff, ascii_buffer[i])) {
-							return stop_logging();
-						}
+	for (uint16_t i = 0; i < count; ++i) {
+		/* Grab a raw accelerometer sample */
+		struct Sample sample;
+		bool success = remove_sample(&sample_buffer, &sample);
+		if (!success) {
+#ifdef DEBUG
+			HANG();
+#endif
+		} else {
+			// TODO dear god, refactor this...
+			/* Convert delta time to ascii and put in SD card buffer */
+			{
+				/* Max timestamp value is 6 digits */
+				uint8_t ascii_buffer[6];
+				itoa(sample.delta_time, ascii_buffer);
+				for (uint8_t i = 0; ascii_buffer[i] != NULL_TERMINATOR && i < 6; ++i) {
+					if (!add_value_to_buffer(&sd_buff, ascii_buffer[i])) {
+						return stop_logging();
 					}
 				}
+			}
+			if (accelerometer.is_enabled) {
 				/* Add delimiter */
-				if (!add_value_to_buffer(&accel_sd_buff, DELIMITER)) {
+				if (!add_value_to_buffer(&sd_buff, DELIMITER)) {
 					return stop_logging();
 				}
 				/* Convert axes to ascii and put in SD card buffer */
@@ -667,53 +632,99 @@ enum DeviceState log_step(void) {
 					uint8_t ascii_buffer[6];
 					/* X-axis */
 					{
-						int16_t x_axis = int8arr_to_int16(accel_sample.x_axis);
+						int16_t x_axis = int8arr_to_int16(sample.accel.x_axis);
 						itoa(x_axis, ascii_buffer);
 						for (uint8_t i = 0; ascii_buffer[i] != NULL_TERMINATOR && i < 6; ++i) {
-							if (!add_value_to_buffer(&accel_sd_buff, ascii_buffer[i])) {
+							if (!add_value_to_buffer(&sd_buff, ascii_buffer[i])) {
 								return stop_logging();
 							}
 						}
 					}
 					/* Add delimiter */
-					if (!add_value_to_buffer(&accel_sd_buff, DELIMITER)) {
+					if (!add_value_to_buffer(&sd_buff, DELIMITER)) {
 						return stop_logging();
 					}
 					/* Y-axis */
 					{
-						int16_t y_axis = int8arr_to_int16(accel_sample.y_axis);
+						int16_t y_axis = int8arr_to_int16(sample.accel.y_axis);
 						itoa(y_axis, ascii_buffer);
 						for (uint8_t i = 0; ascii_buffer[i] != NULL_TERMINATOR && i < 6; ++i) {
-							if (!add_value_to_buffer(&accel_sd_buff, ascii_buffer[i])) {
+							if (!add_value_to_buffer(&sd_buff, ascii_buffer[i])) {
 								return stop_logging();
 							}
 						}
 					}
 					/* Add delimiter */
-					if (!add_value_to_buffer(&accel_sd_buff, DELIMITER)) {
+					if (!add_value_to_buffer(&sd_buff, DELIMITER)) {
 						return stop_logging();
 					}
 					/* Z-axis */
 					{
-						int16_t z_axis = int8arr_to_int16(accel_sample.z_axis);
+						int16_t z_axis = int8arr_to_int16(sample.accel.z_axis);
 						itoa(z_axis, ascii_buffer);
 						for (uint8_t i = 0; ascii_buffer[i] != NULL_TERMINATOR && i < 6; ++i) {
-							if (!add_value_to_buffer(&accel_sd_buff, ascii_buffer[i])) {
+							if (!add_value_to_buffer(&sd_buff, ascii_buffer[i])) {
 								return stop_logging();
 							}
 						}
 					}
 				}
-				/* Next sample is written on a new line */
-				if (!add_value_to_buffer(&accel_sd_buff, NEW_LINE)) {
+			}
+			if (gyroscope.is_enabled) {
+				/* Add delimiter */
+				if (!add_value_to_buffer(&sd_buff, DELIMITER)) {
 					return stop_logging();
 				}
+				/* Convert axes to ascii and put in SD card buffer */
+				{
+					/* Max axis value is 5 digits plus sign */
+					uint8_t ascii_buffer[6];
+					/* X-axis */
+					{
+						int16_t x_axis = int8arr_to_int16(sample.gyro.x_axis);
+						itoa(x_axis, ascii_buffer);
+						for (uint8_t i = 0; ascii_buffer[i] != NULL_TERMINATOR && i < 6; ++i) {
+							if (!add_value_to_buffer(&sd_buff, ascii_buffer[i])) {
+								return stop_logging();
+							}
+						}
+					}
+					/* Add delimiter */
+					if (!add_value_to_buffer(&sd_buff, DELIMITER)) {
+						return stop_logging();
+					}
+					/* Y-axis */
+					{
+						int16_t y_axis = int8arr_to_int16(sample.gyro.y_axis);
+						itoa(y_axis, ascii_buffer);
+						for (uint8_t i = 0; ascii_buffer[i] != NULL_TERMINATOR && i < 6; ++i) {
+							if (!add_value_to_buffer(&sd_buff, ascii_buffer[i])) {
+								return stop_logging();
+							}
+						}
+					}
+					/* Add delimiter */
+					if (!add_value_to_buffer(&sd_buff, DELIMITER)) {
+						return stop_logging();
+					}
+					/* Z-axis */
+					{
+						int16_t z_axis = int8arr_to_int16(sample.gyro.z_axis);
+						itoa(z_axis, ascii_buffer);
+						for (uint8_t i = 0; ascii_buffer[i] != NULL_TERMINATOR && i < 6; ++i) {
+							if (!add_value_to_buffer(&sd_buff, ascii_buffer[i])) {
+								return stop_logging();
+							}
+						}
+					}
+				}
+			}
+			/* Next sample is written on a new line */
+			if (!add_value_to_buffer(&sd_buff, NEW_LINE)) {
+				return stop_logging();
 			}
 		}
-		
 	}
-	/* TODO check for gyro samples */
-	// if (gyroscope.is_enabled && gyro_sample_buffer.count > 0) {
 	return LOG_STATE;
 }
 
@@ -793,39 +804,110 @@ void new_sd_card_file(struct SdCardBuffer *const sd_card_buffer) {
 	sd_card_buffer->cluster = sd_card_buffer->start_cluster;
 	sd_card_buffer->block_num = 0;
 	sd_card_buffer->size = 0;
-}
-
-void new_accel_sd_card_file(struct SdCardBuffer *const sd_card_buffer) {
-	new_sd_card_file(sd_card_buffer);
 	/* Firmware info */
 	add_firmware_info_to_sd_card_file(sd_card_buffer);
 	sd_card_buffer->buffer[sd_card_buffer->index++] = NEW_LINE;
-	/* Range setting */
+	/* Sample rate */
+	sd_card_buffer->buffer[sd_card_buffer->index++] = 's';
+	sd_card_buffer->buffer[sd_card_buffer->index++] = 'a';
+	sd_card_buffer->buffer[sd_card_buffer->index++] = 'm';
+	sd_card_buffer->buffer[sd_card_buffer->index++] = 'p';
+	sd_card_buffer->buffer[sd_card_buffer->index++] = 'l';
+	sd_card_buffer->buffer[sd_card_buffer->index++] = 'e';
+	sd_card_buffer->buffer[sd_card_buffer->index++] = '-';
 	sd_card_buffer->buffer[sd_card_buffer->index++] = 'r';
 	sd_card_buffer->buffer[sd_card_buffer->index++] = 'a';
-	sd_card_buffer->buffer[sd_card_buffer->index++] = 'n';
-	sd_card_buffer->buffer[sd_card_buffer->index++] = 'g';
+	sd_card_buffer->buffer[sd_card_buffer->index++] = 't';
 	sd_card_buffer->buffer[sd_card_buffer->index++] = 'e';
 	sd_card_buffer->buffer[sd_card_buffer->index++] = ':';
 	sd_card_buffer->buffer[sd_card_buffer->index++] = ' ';
-	sd_card_buffer->buffer[sd_card_buffer->index++] = '+';
-	sd_card_buffer->buffer[sd_card_buffer->index++] = '/';
-	sd_card_buffer->buffer[sd_card_buffer->index++] = '-';
-	sd_card_buffer->buffer[sd_card_buffer->index++] = range_bits_to_g_accel(accelerometer.range) + 0x30;
+	/* Convert the sample rate to ascii */
+	{
+		uint8_t ascii_buffer[3];
+		itoa(bandwidth_bits_to_hz_accel(accelerometer.bandwidth), ascii_buffer);
+		for (uint8_t i = 0; ascii_buffer[i] != NULL_TERMINATOR && i < 3; ++i) {
+			sd_card_buffer->buffer[sd_card_buffer->index++] = ascii_buffer[i];
+		}
+	}
 	sd_card_buffer->buffer[sd_card_buffer->index++] = ' ';
-	sd_card_buffer->buffer[sd_card_buffer->index++] = 'g';
-	sd_card_buffer->buffer[sd_card_buffer->index++] = ' ';
-	sd_card_buffer->buffer[sd_card_buffer->index++] = '(';
-	sd_card_buffer->buffer[sd_card_buffer->index++] = '+';
-	sd_card_buffer->buffer[sd_card_buffer->index++] = '/';
-	sd_card_buffer->buffer[sd_card_buffer->index++] = '-';
-	sd_card_buffer->buffer[sd_card_buffer->index++] = '3';
-	sd_card_buffer->buffer[sd_card_buffer->index++] = '2';
-	sd_card_buffer->buffer[sd_card_buffer->index++] = '7';
-	sd_card_buffer->buffer[sd_card_buffer->index++] = '6';
-	sd_card_buffer->buffer[sd_card_buffer->index++] = '8';
-	sd_card_buffer->buffer[sd_card_buffer->index++] = ')';
+	sd_card_buffer->buffer[sd_card_buffer->index++] = 'H';
+	sd_card_buffer->buffer[sd_card_buffer->index++] = 'z';
 	sd_card_buffer->buffer[sd_card_buffer->index++] = NEW_LINE;
+	/* Range setting */
+	if (accelerometer.is_enabled) {
+		sd_card_buffer->buffer[sd_card_buffer->index++] = 'a';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = 'c';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = 'c';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = 'e';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = 'l';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = ' ';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = 'r';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = 'a';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = 'n';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = 'g';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = 'e';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = ':';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = ' ';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = '+';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = '/';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = '-';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = range_bits_to_g_accel(accelerometer.range) + 0x30;
+		sd_card_buffer->buffer[sd_card_buffer->index++] = ' ';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = 'g';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = ' ';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = '(';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = '+';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = '/';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = '-';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = '3';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = '2';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = '7';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = '6';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = '8';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = ')';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = NEW_LINE;
+	}
+	if (gyroscope.is_enabled) {
+		sd_card_buffer->buffer[sd_card_buffer->index++] = 'g';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = 'y';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = 'r';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = 'o';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = ' ';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = 'r';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = 'a';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = 'n';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = 'g';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = 'e';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = ':';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = ' ';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = '+';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = '/';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = '-';
+		/* Convert the range to ascii */
+		{
+			uint8_t ascii_buffer[4];
+			itoa(range_bits_to_dps_gyro(gyroscope.range), ascii_buffer);
+			for (uint8_t i = 0; ascii_buffer[i] != NULL_TERMINATOR && i < 4; ++i) {
+				sd_card_buffer->buffer[sd_card_buffer->index++] = ascii_buffer[i];
+			}
+		}
+		sd_card_buffer->buffer[sd_card_buffer->index++] = ' ';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = 'd';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = 'p';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = 's';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = ' ';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = '(';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = '+';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = '/';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = '-';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = '3';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = '2';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = '7';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = '6';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = '8';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = ')';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = NEW_LINE;
+	}
 	/* delta-time units */
 	sd_card_buffer->buffer[sd_card_buffer->index++] = 'd';
 	sd_card_buffer->buffer[sd_card_buffer->index++] = 't';
@@ -849,18 +931,36 @@ void new_accel_sd_card_file(struct SdCardBuffer *const sd_card_buffer) {
 	/* Column titles */
 	sd_card_buffer->buffer[sd_card_buffer->index++] = 'd';
 	sd_card_buffer->buffer[sd_card_buffer->index++] = 't';
-	sd_card_buffer->buffer[sd_card_buffer->index++] = ',';
-	sd_card_buffer->buffer[sd_card_buffer->index++] = 'x';
-	sd_card_buffer->buffer[sd_card_buffer->index++] = ',';
-	sd_card_buffer->buffer[sd_card_buffer->index++] = 'y';
-	sd_card_buffer->buffer[sd_card_buffer->index++] = ',';
-	sd_card_buffer->buffer[sd_card_buffer->index++] = 'z';
+	if (accelerometer.is_enabled) {
+		sd_card_buffer->buffer[sd_card_buffer->index++] = ',';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = 'a';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = 'c';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = 'c';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = 'e';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = 'l';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = '(';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = 'x';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = ',';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = 'y';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = ',';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = 'z';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = ')';
+	}
+	if (gyroscope.is_enabled) {
+		sd_card_buffer->buffer[sd_card_buffer->index++] = ',';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = 'g';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = 'y';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = 'r';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = 'o';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = '(';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = 'x';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = ',';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = 'y';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = ',';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = 'z';
+		sd_card_buffer->buffer[sd_card_buffer->index++] = ')';
+	}
 	sd_card_buffer->buffer[sd_card_buffer->index++] = NEW_LINE;
-}
-
-void new_gyro_sd_card_file(struct SdCardBuffer *const sd_card_buffer) {
-	new_sd_card_file(sd_card_buffer);
-	// TODO
 }
 
 void add_firmware_info_to_sd_card_file(struct SdCardBuffer *const sd_card_buffer) {
@@ -962,6 +1062,35 @@ bool write_remaining_buffer_to_sd_card(struct SdCardBuffer *const sd_card_buffer
 	return true;
 }
 
+void set_sample_rate(uint16_t bandwidth) {
+	/* We don't support higher sample rates */
+	if (bandwidth > 640) {
+		bandwidth = 0;
+	}
+	accelerometer.bandwidth = bandwidth_bits_accel(bandwidth);
+	/* 
+	 * Set gyroscope's bandwidth slightly higher than the accelerometer so when
+	 * we grab the next accelerometer sample, it's always a new gyroscope sample
+	 */
+	uint16_t bandwidth_hz = bandwidth_bits_to_hz_accel(accelerometer.bandwidth);
+	if (bandwidth_hz == 40) {
+		bandwidth = 100;
+	} else if (bandwidth_hz == 160) {
+		bandwidth = 200;
+	} else if (bandwidth_hz == 640) {
+		bandwidth = 800;
+	}
+	gyroscope.bandwidth = bandwidth_bits_gyro(bandwidth);
+}
+
+void set_range_accel(uint16_t range) {
+	accelerometer.range = range_bits_accel(range);
+}
+
+void set_range_gyro(uint16_t range) {
+	gyroscope.range = range_bits_gyro(range);
+}
+
 void set_disabled_accel(uint16_t disabled) {
 	if (disabled == 1) {
 		accelerometer.is_enabled = false;
@@ -970,28 +1099,12 @@ void set_disabled_accel(uint16_t disabled) {
 	}
 }
 
-void set_range_accel(uint16_t range) {
-	accelerometer.range = range_bits_accel(range);
-}
-
-void set_bandwidth_accel(uint16_t bandwidth) {
-	accelerometer.bandwidth = bandwidth_bits_accel(bandwidth);
-}
-
 void set_disabled_gyro(uint16_t disabled) {
 	if (disabled == 1) {
 		gyroscope.is_enabled = false;
 	}	else {
 		gyroscope.is_enabled = true;
 	}
-}
-
-void set_range_gyro(uint16_t range) {
-	gyroscope.range = range_bits_gyro(range);
-}
-
-void set_bandwidth_gyro(uint16_t bandwidth) {
-	gyroscope.bandwidth = bandwidth_bits_gyro(bandwidth);
 }
 
 void get_config_settings(void) {
@@ -1004,10 +1117,9 @@ void get_config_settings(void) {
 	gyroscope.range = DEFAULT_BANDWIDTH_GYRO;
 	/* Override defaults with settings from config file */
 	struct Setting key_value_settings[4] = {
+		{ .key = (uint8_t *)"sr", .set_value = set_sample_rate },
 		{ .key = (uint8_t *)"ar", .set_value = set_range_accel },
-		{ .key = (uint8_t *)"as", .set_value = set_bandwidth_accel },
-		{ .key = (uint8_t *)"gr", .set_value = set_range_gyro },
-		{ .key = (uint8_t *)"gs", .set_value = set_bandwidth_gyro }
+		{ .key = (uint8_t *)"gr", .set_value = set_range_gyro }
 	};
 	struct Setting key_only_settings[2] = {
 		{ .key = (uint8_t *)"disable_accel", .set_value = set_disabled_accel },
@@ -1123,8 +1235,8 @@ __interrupt void CCR0_ISR(void) {
 
 /*
  * Interrupt Service Routine triggered on Port 1 interrupt flag
- * This ISR handles 3 cases: accelerometer interrupt on new data, gyroscope
- * interrupt on new data, and CTRL button pressed down.
+ * This ISR handles 2 cases: accelerometer interrupt on new data
+ * and CTRL button pressed down.
  * NOTE: This function uses the MSP430F5310 Real-Time Clock module
  */
 #pragma vector = PORT1_VECTOR
@@ -1141,16 +1253,9 @@ __interrupt void PORT1_ISR(void) {
 	}
 	if (accel_int()) {
 		//clear_int_accel(); //TODO unnecessary?
-		if (!accel_sample_event_handled()) {
-			/* Trigger interrupt to try again to capture current accelerometer sample */
+		if (!sample_event_handled()) {
+			/* Trigger interrupt to try again to capture current sample */
 			set_int_accel();
-		}
-	}
-	if (gyro_int()) {
-		//clear_int_gyro(); //TODO unnecessary?
-		if (!gyro_sample_event_handled()) {
-			/* Trigger interrupt to try again to capture current gyroscope sample */
-			set_int_gyro();
 		}
 	}
 }
@@ -1171,15 +1276,17 @@ bool button_press_event_handled(void) {
 	return true;
 }
 
-bool accel_sample_event_handled(void) {
+bool sample_event_handled(void) {
 	/* Get the timestamp */
 	uint32_t timestamp = time_cont;
 	timestamp <<= 16;
 	timestamp += TA0R;
 	/* Let the timer interrupt run first and then capture sample */
 	if (timer_interrupt_triggered()) {
+		debug_hit = true;
 		return false;
 	}
+	debug_hit = false;
 	/* Calculate the delta timestamp for sample data using previous sample's timestamp */
 	uint32_t delta_time;
 	if (timestamp_accel <= timestamp) {
@@ -1187,25 +1294,49 @@ bool accel_sample_event_handled(void) {
 	} else {
 		delta_time = timestamp + (0x1000000 - timestamp_accel);
 	}
-	/* Put the accelerometer sample data in the buffer */
-	bool success = add_accel_sample(&accel_sample_buffer, delta_time,
-		read_addr_accel(ACCEL_OUTX_H), read_addr_accel(ACCEL_OUTX_L),
-		read_addr_accel(ACCEL_OUTY_H), read_addr_accel(ACCEL_OUTY_L),
-		read_addr_accel(ACCEL_OUTZ_H), read_addr_accel(ACCEL_OUTZ_L));
+	/* Get accelerometer sample data */
+	uint8_t accel_x_axis_h = 0;
+	uint8_t accel_x_axis_l = 0;
+	uint8_t accel_y_axis_h = 0;
+	uint8_t accel_y_axis_l = 0;
+	uint8_t accel_z_axis_h = 0;
+	uint8_t accel_z_axis_l = 0;
+	if (accelerometer.is_enabled) {
+		accel_x_axis_h = read_addr_accel(ACCEL_OUTX_H);
+		accel_x_axis_l = read_addr_accel(ACCEL_OUTX_L);
+		accel_y_axis_h = read_addr_accel(ACCEL_OUTY_H);
+		accel_y_axis_l = read_addr_accel(ACCEL_OUTY_L);
+		accel_z_axis_h = read_addr_accel(ACCEL_OUTZ_H);
+		accel_z_axis_l = read_addr_accel(ACCEL_OUTZ_L);
+	}
+	/* Get gyroscope sample data */
+	uint8_t gyro_x_axis_h = 0;
+	uint8_t gyro_x_axis_l = 0;
+	uint8_t gyro_y_axis_h = 0;
+	uint8_t gyro_y_axis_l = 0;
+	uint8_t gyro_z_axis_h = 0;
+	uint8_t gyro_z_axis_l = 0;
+	if (gyroscope.is_enabled) {
+		gyro_x_axis_h = read_addr_gyro(GYRO_OUTX_H);
+		gyro_x_axis_l = read_addr_gyro(GYRO_OUTX_L);
+		gyro_y_axis_h = read_addr_gyro(GYRO_OUTY_H);
+		gyro_y_axis_l = read_addr_gyro(GYRO_OUTY_L);
+		gyro_z_axis_h = read_addr_gyro(GYRO_OUTZ_H);
+		gyro_z_axis_l = read_addr_gyro(GYRO_OUTZ_L);
+	}
+	/* Put the sample data in the buffer */
+	bool success = add_sample(&sample_buffer, delta_time,
+										accel_x_axis_h, accel_x_axis_l, accel_y_axis_h, accel_y_axis_l, accel_z_axis_h, accel_z_axis_l,
+										gyro_x_axis_h, gyro_x_axis_l, gyro_y_axis_h, gyro_y_axis_l, gyro_z_axis_h, gyro_z_axis_l);
 	if (!success) {
 		/* The buffer is full */
 #ifdef DEBUG
-		debug_hit = true;
+		++debug_int;
 #endif
 		return true;
 	}
 	/* Update timestamp only if sample was successfully added to buffer */
 	timestamp_accel = timestamp;
-	return true;
-}
-
-bool gyro_sample_event_handled(void) {
-	// TODO
 	return true;
 }
 
