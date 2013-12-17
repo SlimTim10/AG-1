@@ -28,7 +28,7 @@ typedef enum {
 	CMD13 = 13,		/* SEND_STATUS */
 	CMD17 = 17,		/* READ_SINGLE_BLOCK */
 	CMD24 = 24,		/* WRITE_BLOCK */
-/* 	CMD25 = 25, */		/* WRITE_MULTIPLE_BLOCK */
+ 	CMD25 = 25,		/* WRITE_MULTIPLE_BLOCK */
 	CMD55 = 55,		/* APP_CMD */
 	CMD58 = 58,		/* READ_OCR */
 	ACMD41 = 41		/* SD_SEND_OP_COND */
@@ -103,7 +103,7 @@ uint8_t init_sd(void);
 void go_idle_sd(void);
 uint8_t send_cmd_sd(SDcmd cmd, uint32_t arg);
 uint8_t send_acmd_sd(SDcmd acmd, uint32_t arg);
-/* uint8_t write_multiple_block(uint32_t start_offset); */
+uint8_t write_multiple_block(uint8_t *data, uint32_t start_offset, uint8_t blocks);
 uint8_t write_block(uint8_t *data, uint32_t offset, uint16_t count);
 uint8_t read_block(uint8_t *data, uint32_t offset, enum SDTimeout timeout);
 uint16_t find_cluster(uint8_t *data, struct fatstruct *info);

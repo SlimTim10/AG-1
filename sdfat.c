@@ -195,13 +195,12 @@ uint8_t wait_startblock(enum SDTimeout timeout) {
 	return SD_BAD_TOKEN;
 }
 
-#if 0
 /*
  * Write multiple blocks
- * Assume data buffer 2048 bytes in size and write 4 consecutive 512-byte
- * blocks, beginning at start_offset.
+ * Write consecutive 512-bytes for each block in data buffer
+ * beginning at start_offset.
  */
-uint8_t write_multiple_block(uint8_t *data, uint32_t start_offset) {
+uint8_t write_multiple_block(uint8_t *data, uint32_t start_offset, uint8_t blocks) {
 	SD_SELECT();
 
 	wait_notbusy();	/* Wait for card to be ready */
@@ -212,14 +211,15 @@ uint8_t write_multiple_block(uint8_t *data, uint32_t start_offset) {
 		SD_DESELECT();
 		return err;
 	}
-
-	/* Write data buffer to 4 blocks */
-	for (uint8_t i = 0; i < 4; i++) {
+	
+	/* Write data buffer to blocks */
+	for (uint8_t i = 0; i < blocks; i++) {
 		/* Send 'Start Block' token for each block */
-		spia_send(START_BLK_TOK);
-
+		spia_send(0xFC); // TODO magic num
+		
+		uint16_t block_offset = BLKSIZE * i;
 		for (uint16_t j = 0; j < BLKSIZE; j++) {
-			spia_send(data[j]);
+			spia_send(data[block_offset + j]);
 		}
 
 		spia_send(DUMMY);	/* Dummy CRC */
@@ -228,7 +228,11 @@ uint8_t write_multiple_block(uint8_t *data, uint32_t start_offset) {
 		wait_notbusy();	/* Wait for flash programming to complete */
 	}
 
-	spia_send(STOP_TRANS_TOK);	/* Send 'Stop Tran' token (stop transmission) */
+	// TODO magic num
+	spia_send(0xFD);	/* Send 'Stop Tran' token (stop transmission) */
+	
+	/* Wait for flash programming to complete */
+	wait_notbusy();
 
 	/* Get status */
 	if (err = send_cmd_sd(CMD13, 0) || spia_rec())	{
@@ -240,7 +244,6 @@ uint8_t write_multiple_block(uint8_t *data, uint32_t start_offset) {
 
 	return SD_SUCCESS;
 }
-#endif
 
 /*
  * Write the first count bytes in the given data buffer starting at offset

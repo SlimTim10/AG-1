@@ -39,12 +39,15 @@
 	}
 
 /* Size of data buffers */
-/*** TODO NOTE 4660 bytes available to use ***/
-/* 3.2KB */
-enum { RAW_SAMPLE_BUFF_SIZE = 250 };
+/* 3.6KB */
+//enum { RAW_SAMPLE_BUFF_SIZE = 225 };
 
 /* Should be a multiple of SD card write block (512B) */
-enum { SD_SAMPLE_BUFF_SIZE = 512 };
+//enum { SD_SAMPLE_BUFF_SIZE = 512 };
+
+// testing
+enum { RAW_SAMPLE_BUFF_SIZE = 20 };
+enum { SD_SAMPLE_BUFF_SIZE = 4096 };
 
 /* 1B */
 enum { BUTTON_BUFF_SIZE = 1 };
@@ -979,7 +982,11 @@ void add_firmware_info_to_sd_card_file(struct SdCardBuffer *const sd_card_buffer
 }
 
 uint32_t get_block_offset(const struct SdCardBuffer *const sd_card_buffer) {
-	return get_cluster_offset(sd_card_buffer->cluster, &fatinfo) + sd_card_buffer->block_num * SD_SAMPLE_BUFF_SIZE;
+	//return get_cluster_offset(sd_card_buffer->cluster, &fatinfo) + sd_card_buffer->block_num * SD_SAMPLE_BUFF_SIZE; testing
+	uint32_t block_offset = sd_card_buffer->block_num;
+	block_offset *= SD_SAMPLE_BUFF_SIZE;
+	block_offset += get_cluster_offset(sd_card_buffer->cluster, &fatinfo);
+	return block_offset;
 }
 
 bool add_value_to_buffer(struct SdCardBuffer *const sd_card_buffer, uint8_t value) {
@@ -1001,7 +1008,8 @@ bool write_full_buffer_to_sd_card(struct SdCardBuffer *const sd_card_buffer) {
 	if (sd_card_buffer->index == SD_SAMPLE_BUFF_SIZE) {
 		/* Write entire buffer to SD card */
 		uint32_t block_offset = get_block_offset(sd_card_buffer);
-		if (write_block(sd_card_buffer->buffer, block_offset, SD_SAMPLE_BUFF_SIZE) != SD_SUCCESS) {
+		uint8_t blocks = SD_SAMPLE_BUFF_SIZE / BLKSIZE;
+		if (write_multiple_block(sd_card_buffer->buffer, block_offset, blocks) != SD_SUCCESS) {
 			/* Couldn't write block */
 #ifdef DEBUG
 			HANG();
@@ -1011,7 +1019,10 @@ bool write_full_buffer_to_sd_card(struct SdCardBuffer *const sd_card_buffer) {
 		/* Prepare for writing next block */
 		sd_card_buffer->size += SD_SAMPLE_BUFF_SIZE;
 		sd_card_buffer->index = 0;
-		++sd_card_buffer->block_num;
+		sd_card_buffer->block_num += blocks;
+		
+		if (sd_card_buffer->size >= 65536) return false; // testing
+		
 		/* Cluster is full */
 		if (!valid_block(sd_card_buffer->block_num, &fatinfo)) {
 			/* Find another cluster */
@@ -1046,19 +1057,20 @@ bool write_remaining_buffer_to_sd_card(struct SdCardBuffer *const sd_card_buffer
 #endif
 		return false;
 	}
-	if (sd_card_buffer->index > 0) {
-		/* Write the remaining buffer data to SD card */
-		uint32_t block_offset = get_block_offset(sd_card_buffer);
-		if (write_block(sd_card_buffer->buffer, block_offset, sd_card_buffer->index) != SD_SUCCESS) {
-			/* Couldn't write block */
-#ifdef DEBUG
-			HANG();
-#endif
-			return false;
-		}
-		/* Prepare for writing next block */
-		sd_card_buffer->size += sd_card_buffer->index;
-	}
+	// TODO with multi block write (or multiple single block writes?)
+//	if (sd_card_buffer->index > 0) {
+//		/* Write the remaining buffer data to SD card */
+//		uint32_t block_offset = get_block_offset(sd_card_buffer);
+//		if (write_block(sd_card_buffer->buffer, block_offset, sd_card_buffer->index) != SD_SUCCESS) {
+//			/* Couldn't write block */
+//#ifdef DEBUG
+//			HANG();
+//#endif
+//			return false;
+//		}
+//		/* Prepare for writing next block */
+//		sd_card_buffer->size += sd_card_buffer->index;
+//	}
 	return true;
 }
 
