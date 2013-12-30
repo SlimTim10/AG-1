@@ -41,13 +41,11 @@
 /* Size of data buffers */
 /* 3.6KB */
 //enum { RAW_SAMPLE_BUFF_SIZE = 225 };
+enum { RAW_SAMPLE_BUFF_SIZE = 140 };
 
 /* Should be a multiple of SD card write block (512B) */
 //enum { SD_SAMPLE_BUFF_SIZE = 512 };
-
-// testing
-enum { RAW_SAMPLE_BUFF_SIZE = 20 };
-enum { SD_SAMPLE_BUFF_SIZE = 4096 };
+enum { SD_SAMPLE_BUFF_SIZE = 2048 };
 
 /* 1B */
 enum { BUTTON_BUFF_SIZE = 1 };
@@ -982,9 +980,8 @@ void add_firmware_info_to_sd_card_file(struct SdCardBuffer *const sd_card_buffer
 }
 
 uint32_t get_block_offset(const struct SdCardBuffer *const sd_card_buffer) {
-	//return get_cluster_offset(sd_card_buffer->cluster, &fatinfo) + sd_card_buffer->block_num * SD_SAMPLE_BUFF_SIZE; testing
 	uint32_t block_offset = sd_card_buffer->block_num;
-	block_offset *= SD_SAMPLE_BUFF_SIZE;
+	block_offset *= BLKSIZE;
 	block_offset += get_cluster_offset(sd_card_buffer->cluster, &fatinfo);
 	return block_offset;
 }
@@ -1005,12 +1002,13 @@ bool write_full_buffer_to_sd_card(struct SdCardBuffer *const sd_card_buffer) {
 #endif
 		return false;
 	}
+	/* Buffer is full so write it to the SD card */
 	if (sd_card_buffer->index == SD_SAMPLE_BUFF_SIZE) {
 		/* Write entire buffer to SD card */
 		uint32_t block_offset = get_block_offset(sd_card_buffer);
-		uint8_t blocks = SD_SAMPLE_BUFF_SIZE / BLKSIZE;
+		uint8_t blocks = (uint16_t)SD_SAMPLE_BUFF_SIZE / BLKSIZE;
 		if (write_multiple_block(sd_card_buffer->buffer, block_offset, blocks) != SD_SUCCESS) {
-			/* Couldn't write block */
+			/* Couldn't write blocks */
 #ifdef DEBUG
 			HANG();
 #endif
@@ -1020,8 +1018,6 @@ bool write_full_buffer_to_sd_card(struct SdCardBuffer *const sd_card_buffer) {
 		sd_card_buffer->size += SD_SAMPLE_BUFF_SIZE;
 		sd_card_buffer->index = 0;
 		sd_card_buffer->block_num += blocks;
-		
-		if (sd_card_buffer->size >= 65536) return false; // testing
 		
 		/* Cluster is full */
 		if (!valid_block(sd_card_buffer->block_num, &fatinfo)) {
@@ -1057,20 +1053,54 @@ bool write_remaining_buffer_to_sd_card(struct SdCardBuffer *const sd_card_buffer
 #endif
 		return false;
 	}
-	// TODO with multi block write (or multiple single block writes?)
-//	if (sd_card_buffer->index > 0) {
-//		/* Write the remaining buffer data to SD card */
-//		uint32_t block_offset = get_block_offset(sd_card_buffer);
-//		if (write_block(sd_card_buffer->buffer, block_offset, sd_card_buffer->index) != SD_SUCCESS) {
-//			/* Couldn't write block */
-//#ifdef DEBUG
-//			HANG();
-//#endif
-//			return false;
-//		}
-//		/* Prepare for writing next block */
-//		sd_card_buffer->size += sd_card_buffer->index;
-//	}
+	/* Write the remaining buffer data to SD card */
+	if (sd_card_buffer->index > BLKSIZE) {
+		/*
+		 * Do a multi block write followed by a single block write if not all
+		 * bytes were written: remaining bytes were not a multiple of BLKSIZE
+		 */
+		uint32_t block_offset = get_block_offset(sd_card_buffer);
+		uint8_t blocks = sd_card_buffer->index / BLKSIZE;
+		if (write_multiple_block(sd_card_buffer->buffer, block_offset, blocks) != SD_SUCCESS) {
+			/* Couldn't write blocks */
+#ifdef DEBUG
+			HANG();
+#endif
+			return false;
+		}
+		uint16_t bytes_written = blocks * BLKSIZE;
+		sd_card_buffer->size += bytes_written;
+		sd_card_buffer->index = sd_card_buffer->index - bytes_written;
+		sd_card_buffer->block_num += blocks;
+		
+		/* Now write the single block */
+		if (sd_card_buffer->index > 0) {
+			/* Place bytes at beginning of buffer */
+			for (uint16_t i = 0; i < sd_card_buffer->index; ++i) {
+				sd_card_buffer->buffer[i] = sd_card_buffer->buffer[bytes_written + i];
+			}
+			/* Write the block */
+			block_offset = get_block_offset(sd_card_buffer);
+			if (write_block(sd_card_buffer->buffer, block_offset, sd_card_buffer->index) != SD_SUCCESS) {
+	#ifdef DEBUG
+				HANG();
+	#endif
+				return false;
+			}
+			sd_card_buffer->size += sd_card_buffer->index;
+		}
+	} else {
+		/* Write the single block */
+		uint32_t block_offset = get_block_offset(sd_card_buffer);
+		if (write_block(sd_card_buffer->buffer, block_offset, sd_card_buffer->index) != SD_SUCCESS) {
+			/* Couldn't write block */
+#ifdef DEBUG
+			HANG();
+#endif
+			return false;
+		}
+		sd_card_buffer->size += sd_card_buffer->index;
+	}
 	return true;
 }
 

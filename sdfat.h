@@ -31,6 +31,7 @@ typedef enum {
  	CMD25 = 25,		/* WRITE_MULTIPLE_BLOCK */
 	CMD55 = 55,		/* APP_CMD */
 	CMD58 = 58,		/* READ_OCR */
+	ACMD23 = 23,	/* SET_WR_BLK_ERASE_COUNT */
 	ACMD41 = 41		/* SD_SEND_OP_COND */
 } SDcmd;
 
@@ -59,6 +60,8 @@ enum SDTokens{
 	SD_START_BLOCK = 0xFE,
 	SD_BLOCK_ERR = 0xFF,
 	SD_SINGLE_BLK = 0xFE,
+	SD_MULTI_BLK = 0xFC,
+	SD_STOP_TRANS = 0xFD,
 	SD_VERIFY_TYPE = 0x01,
 	SD_WRITE_BLK = 0x05
 };

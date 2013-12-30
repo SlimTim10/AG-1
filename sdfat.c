@@ -205,21 +205,27 @@ uint8_t write_multiple_block(uint8_t *data, uint32_t start_offset, uint8_t block
 
 	wait_notbusy();	/* Wait for card to be ready */
 
-	/* WRITE_MULTIPLE_BLOCK command */
+	/* Send command to erase blocks */
 	uint8_t err;
+	if (err = send_acmd_sd(ACMD23, blocks)) {
+		SD_DESELECT();
+		return err;
+	}
+	
+	/* Send command to write blocks */
 	if (err = send_cmd_sd(CMD25, start_offset)) {
 		SD_DESELECT();
 		return err;
 	}
 	
 	/* Write data buffer to blocks */
-	for (uint8_t i = 0; i < blocks; i++) {
+	for (uint8_t i = 0; i < blocks; ++i) {
 		/* Send 'Start Block' token for each block */
-		spia_send(0xFC); // TODO magic num
+		spia_send(SD_MULTI_BLK);
 		
 		uint16_t block_offset = BLKSIZE * i;
-		for (uint16_t j = 0; j < BLKSIZE; j++) {
-			spia_send(data[block_offset + j]);
+		for (uint16_t j = block_offset; j < block_offset + BLKSIZE; ++j) {
+			spia_send(data[j]);
 		}
 
 		spia_send(DUMMY);	/* Dummy CRC */
@@ -228,8 +234,8 @@ uint8_t write_multiple_block(uint8_t *data, uint32_t start_offset, uint8_t block
 		wait_notbusy();	/* Wait for flash programming to complete */
 	}
 
-	// TODO magic num
-	spia_send(0xFD);	/* Send 'Stop Tran' token (stop transmission) */
+	/* Send 'Stop Tran' token (stop transmission) */
+	spia_send(SD_STOP_TRANS);
 	
 	/* Wait for flash programming to complete */
 	wait_notbusy();
@@ -249,6 +255,11 @@ uint8_t write_multiple_block(uint8_t *data, uint32_t start_offset, uint8_t block
  * Write the first count bytes in the given data buffer starting at offset
  */
 uint8_t write_block(uint8_t *data, uint32_t offset, uint16_t count) {
+	/* Invalid argument for count */
+	if (count > BLKSIZE) {
+		return 1;
+	}
+	
 	SD_SELECT();
 	
 	/* WRITE_BLOCK command */
@@ -260,14 +271,15 @@ uint8_t write_block(uint8_t *data, uint32_t offset, uint16_t count) {
 	spia_send(SD_SINGLE_BLK);	/* Write Single Block token */
 	
 	/* Write data bytes */
-	if (count > BLKSIZE) count = BLKSIZE;
-	uint16_t i;
-	for (i = 0; i < count; i++) {
-		spia_send(data[i]);
-	}
-	/* Padding to fill block */
-	for (; i < BLKSIZE; i++) {
-		spia_send(0);
+	{
+		uint16_t i;
+		for (i = 0; i < count; i++) {
+			spia_send(data[i]);
+		}
+		/* Padding to fill block */
+		for (; i < BLKSIZE; i++) {
+			spia_send(0);
+		}
 	}
 	
 	spia_send(DUMMY);	/* Dummy CRC */
