@@ -41,7 +41,7 @@
 /* Size of data buffers */
 /* 3.6KB */
 //enum { RAW_SAMPLE_BUFF_SIZE = 225 };
-enum { RAW_SAMPLE_BUFF_SIZE = 140 };
+enum { RAW_SAMPLE_BUFF_SIZE = 149 };
 
 /* Should be a multiple of SD card write block (512B) */
 //enum { SD_SAMPLE_BUFF_SIZE = 512 };
@@ -219,14 +219,37 @@ uint8_t* itoa(int32_t value, uint8_t* result) {
 		tmp_value = value;
 		value /= base;
 		*ptr++ = "9876543210123456789" [9 + (tmp_value - value * base)];
-	} while ( value );
+	} while (value);
 
 	/* Apply negative sign */
 	if (tmp_value < 0) *ptr++ = '-';
 	*ptr-- = NULL_TERMINATOR;
 	while(ptr1 < ptr) {
 		tmp_char = *ptr;
-		*ptr--= *ptr1;
+		*ptr-- = *ptr1;
+		*ptr1++ = tmp_char;
+	}
+	return result;
+}
+
+/* Adapted from the itoa function */
+uint8_t* uitoa(uint32_t value, uint8_t* result);
+
+uint8_t* uitoa(uint32_t value, uint8_t* result) {
+	uint8_t* ptr = result, *ptr1 = result, tmp_char;
+	uint32_t tmp_value;
+	uint8_t base = 10;
+	
+	do {
+		tmp_value = value;
+		value /= base;
+		*ptr++ = "0123456789" [(tmp_value - value * base)];
+	} while (value);
+	
+	*ptr-- = NULL_TERMINATOR;
+	while(ptr1 < ptr) {
+		tmp_char = *ptr;
+		*ptr-- = *ptr1;
 		*ptr1++ = tmp_char;
 	}
 	return result;
@@ -236,7 +259,7 @@ uint8_t* itoa(int32_t value, uint8_t* result) {
 int16_t int8arr_to_int16(uint8_t *value);
 
 int16_t int8arr_to_int16(uint8_t *value) {
-	int16_t result = (*value << 8) | *(value + 1);
+	int16_t result = ((uint16_t)*value << 8) | *(value + 1);
 	return result;
 	
 //	// TODO old method; see TODO below
@@ -247,6 +270,15 @@ int16_t int8arr_to_int16(uint8_t *value) {
 //		result = -((~result + 1) & 0x7FFF);
 //	}
 //	return result;
+}
+
+/*
+ * Convert a 32 bit unsigned number from a three-byte array where the high
+ * byte is padding
+ */
+uint32_t int8arr_to_uint32(uint8_t *value) {
+	uint32_t result = ((uint32_t)*value << 16) | ((uint16_t)*(value + 1) << 8) | *(value + 2);
+	return result;
 }
 
 void start_watchdog(void) {
@@ -569,25 +601,6 @@ enum DeviceState idle_step(void) {
 }
 
 enum DeviceState log_step(void) {
-	/* Check for any button presses */
-	if (button_press_buffer.count > 0) {
-		enum ButtonPress button_press;
-		bool success = remove_button_press(&button_press_buffer, &button_press);
-#ifdef DEBUG
-		if (!success) {
-			HANG();
-		}
-#endif
-		switch(button_press) {
-			case BUTTON_TAP:
-				return stop_logging();
-				break;
-			case BUTTON_HOLD:
-				/* TODO turn off */
-				break;
-		}
-	}
-	
 	/* Process samples */
 	// TODO refactor this to its own function but for now...
 	/* Convert all current samples in raw buffer to ascii */
@@ -611,12 +624,26 @@ enum DeviceState log_step(void) {
 #endif
 		} else {
 			// TODO dear god, refactor this...
+			/* Sample is written on a new line */
+			if (!add_value_to_buffer(&sd_buff, NEW_LINE)) {
+				return stop_logging();
+			}
 			/* Convert delta time to ascii and put in SD card buffer */
 			{
-				/* Max timestamp value is 6 digits */
-				uint8_t ascii_buffer[6];
-				itoa(sample.delta_time, ascii_buffer);
-				for (uint8_t i = 0; ascii_buffer[i] != NULL_TERMINATOR && i < 6; ++i) {
+//				/* Max timestamp value is 6 digits */
+//				uint8_t ascii_buffer[6];
+//				itoa(sample.delta_time, ascii_buffer);
+//				for (uint8_t i = 0; ascii_buffer[i] != NULL_TERMINATOR && i < 6; ++i) {
+//					if (!add_value_to_buffer(&sd_buff, ascii_buffer[i])) {
+//						return stop_logging();
+//					}
+//				}
+//				
+				int32_t delta_time = int8arr_to_uint32(sample.delta_time);
+				/* Max timestamp value is 8 digits */
+				uint8_t ascii_buffer[8];
+				uitoa(delta_time, ascii_buffer);
+				for (uint8_t i = 0; ascii_buffer[i] != NULL_TERMINATOR && i < 8; ++i) {
 					if (!add_value_to_buffer(&sd_buff, ascii_buffer[i])) {
 						return stop_logging();
 					}
@@ -720,10 +747,24 @@ enum DeviceState log_step(void) {
 					}
 				}
 			}
-			/* Next sample is written on a new line */
-			if (!add_value_to_buffer(&sd_buff, NEW_LINE)) {
+		}
+	}
+	/* Check for any button presses */
+	if (button_press_buffer.count > 0) {
+		enum ButtonPress button_press;
+		bool success = remove_button_press(&button_press_buffer, &button_press);
+#ifdef DEBUG
+		if (!success) {
+			HANG();
+		}
+#endif
+		switch(button_press) {
+			case BUTTON_TAP:
 				return stop_logging();
-			}
+				break;
+			case BUTTON_HOLD:
+				/* TODO turn off */
+				break;
 		}
 	}
 	return LOG_STATE;
@@ -961,7 +1002,6 @@ void new_sd_card_file(struct SdCardBuffer *const sd_card_buffer) {
 		sd_card_buffer->buffer[sd_card_buffer->index++] = 'z';
 		sd_card_buffer->buffer[sd_card_buffer->index++] = ')';
 	}
-	sd_card_buffer->buffer[sd_card_buffer->index++] = NEW_LINE;
 }
 
 void add_firmware_info_to_sd_card_file(struct SdCardBuffer *const sd_card_buffer) {
@@ -1367,7 +1407,7 @@ bool sample_event_handled(void) {
 		gyro_z_axis_l = read_addr_gyro(GYRO_OUTZ_L);
 	}
 	/* Put the sample data in the buffer */
-	bool success = add_sample(&sample_buffer, delta_time,
+	bool success = add_sample(&sample_buffer, delta_time >> 16, delta_time >> 8, delta_time,
 										accel_x_axis_h, accel_x_axis_l, accel_y_axis_h, accel_y_axis_l, accel_z_axis_h, accel_z_axis_l,
 										gyro_x_axis_h, gyro_x_axis_l, gyro_y_axis_h, gyro_y_axis_l, gyro_z_axis_h, gyro_z_axis_l);
 	if (!success) {

@@ -29,7 +29,7 @@ void clear_sample_buffer(struct SampleBuffer *sample_buffer) {
 	sample_buffer->count = 0;
 }
 
-bool add_sample(struct SampleBuffer *sample_buffer, uint32_t delta_time, 
+bool add_sample(struct SampleBuffer *sample_buffer, uint8_t delta_time_h, uint8_t delta_time_m, uint8_t delta_time_l,
 						uint8_t accel_x_axis_h, uint8_t accel_x_axis_l, uint8_t accel_y_axis_h, uint8_t accel_y_axis_l, uint8_t accel_z_axis_h, uint8_t accel_z_axis_l,
 						uint8_t gyro_x_axis_h, uint8_t gyro_x_axis_l, uint8_t gyro_y_axis_h, uint8_t gyro_y_axis_l, uint8_t gyro_z_axis_h, uint8_t gyro_z_axis_l) {
 	/* The buffer is full */
@@ -38,7 +38,10 @@ bool add_sample(struct SampleBuffer *sample_buffer, uint32_t delta_time,
 	}
 	/* Set data for new sample based on parameters */
 	struct Sample *sample = &sample_buffer->samples[sample_buffer->end];
-	sample->delta_time = delta_time;
+	/* Delta time */
+	sample->delta_time[0] = delta_time_h;
+	sample->delta_time[1] = delta_time_m;
+	sample->delta_time[2] = delta_time_l;
 	/* From accelerometer */
 	sample->accel.x_axis[0] = accel_x_axis_h;
 	sample->accel.x_axis[1] = accel_x_axis_l;
@@ -64,9 +67,15 @@ bool remove_sample(struct SampleBuffer *sample_buffer, struct Sample *sample_ret
 	if (sample_buffer->count == 0) {
 		return false;
 	}
+	/*
+	 * Store the sample in a new variable so the data won't be overwritten by a new sample when read 
+	 * instead of returning the existing sample in the buffer
+	 */
 	struct Sample *sample = &sample_buffer->samples[sample_buffer->start];
-	/* Store the sample in a new variable so the data won't be overwritten by a new sample when read */
-	sample_ret->delta_time = sample->delta_time;
+	/* Delta time */
+	sample_ret->delta_time[0] = sample->delta_time[0];
+	sample_ret->delta_time[1] = sample->delta_time[1];
+	sample_ret->delta_time[2] = sample->delta_time[2];
 	/* From accelerometer */
 	sample_ret->accel.x_axis[0] = sample->accel.x_axis[0];
 	sample_ret->accel.x_axis[1] = sample->accel.x_axis[1];
@@ -88,7 +97,10 @@ bool remove_sample(struct SampleBuffer *sample_buffer, struct Sample *sample_ret
 }
 
 void clear_sample(struct Sample *sample) {
-	sample->delta_time = 0;
+	/* Delta time */
+	sample->delta_time[0] = 0;
+	sample->delta_time[1] = 0;
+	sample->delta_time[2] = 0;
 	/* From accelerometer */
 	sample->accel.x_axis[0] = 0;
 	sample->accel.x_axis[1] = 0;

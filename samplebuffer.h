@@ -17,7 +17,7 @@ struct LoggerSample {
 
 /* Hold the loggers' sample data */
 struct Sample {
-	uint32_t delta_time;
+	uint8_t delta_time[3];
 	struct LoggerSample accel;
 	struct LoggerSample gyro;
 };
@@ -56,7 +56,7 @@ void clear_sample_buffer(struct SampleBuffer *sample_buffer);
  *
  * Return true if the insertion was successful, false if not
  */
-bool add_sample(struct SampleBuffer *sample_buffer, uint32_t delta_time, 
+bool add_sample(struct SampleBuffer *sample_buffer, uint8_t delta_time_h, uint8_t delta_time_m, uint8_t delta_time_l,
 						uint8_t accel_x_axis_h, uint8_t accel_x_axis_l, uint8_t accel_y_axis_h, uint8_t accel_y_axis_l, uint8_t accel_z_axis_h, uint8_t accel_z_axis_l,
 						uint8_t gyro_x_axis_h, uint8_t gyro_x_axis_l, uint8_t gyro_y_axis_h, uint8_t gyro_y_axis_l, uint8_t gyro_z_axis_h, uint8_t gyro_z_axis_l);
 
