@@ -42,7 +42,7 @@
  * Return the end index of file name match with string starting at offset.
  * Otherwise, return 0.
  */
-uint8_t file_name_match_end(const uint8_t *file_name, const uint8_t *string, uint32_t offset);
+uint32_t file_name_match_end(const uint8_t *file_name, const uint8_t *string, uint32_t offset);
 
 /*
  * Initialize SD Card
@@ -846,7 +846,7 @@ uint16_t get_file_num(uint8_t *data, const struct fatstruct *info, const uint8_t
 		}
 		/* Convert 3 byte ASCII file number suffix to integer */
 		if (data[j] != DTEDEL) {
-			uint8_t k = file_name_match_end(file_name, data, j);
+			uint32_t k = file_name_match_end(file_name, data, j);
 			if (k > 0) {
 				uint16_t first_digit = data[k] - 0x30;
 				if (first_digit <= 9) {
@@ -875,7 +875,7 @@ uint16_t get_file_num(uint8_t *data, const struct fatstruct *info, const uint8_t
 	return max + 1;
 }
 
-uint8_t file_name_match_end(const uint8_t *file_name, const uint8_t *string, uint32_t offset) {
+uint32_t file_name_match_end(const uint8_t *file_name, const uint8_t *string, uint32_t offset) {
 	uint8_t i = 0;
 	while (file_name[i] != '\0' && i < MAX_FILE_NAME) {
 		if (file_name[i] != string[offset + i]) {
