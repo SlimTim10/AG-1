@@ -1809,9 +1809,6 @@
     <name>$PROJ_DIR$\main.c</name>
   </file>
   <file>
-    <name>$PROJ_DIR$\main.h</name>
-  </file>
-  <file>
     <name>$PROJ_DIR$\msp430f5310_extra.c</name>
   </file>
   <file>

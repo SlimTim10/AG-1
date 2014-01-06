@@ -12,11 +12,12 @@
 #include "util.h"
 #include "msp430f5310_extra.h"
 #include "circuit.h"
-#include "main.h"
 #include "samplebuffer.h"
 #include "buttonbuffer.h"
 
 /* Uncomment for easier debugging */
+// TODO uncomment to test for release as well as
+// add more feed_watchdog() functions
 #define DEBUG
 
 /* Update for new firmware versions */
@@ -35,13 +36,13 @@
 /* Small delay before powering on components */
 #define POWER_ON_DELAY() \
 	for (uint8_t j = 0; j < CLOCK_SPEED; j++) { \
-		for (uint16_t i = 0; i < 5000; i++); \
+		for (uint16_t i = 0; i < 5000; i++) __no_operation(); \
 	}
 
 /* Delay between multiple LED flashes */
 #define LED_FLASH_DELAY(DELAY) \
 	for (uint8_t j = 0; j < CLOCK_SPEED; ++j) { \
-		for (uint16_t i = 0; i < DELAY; ++i); \
+		for (uint16_t i = 0; i < DELAY; ++i) __no_operation(); \
 	}
 
 /* Amount of time between LED flashes in seconds when idle */
@@ -127,16 +128,22 @@ void power_on_accelerometer(void);
 void power_off_accelerometer(void);
 void power_on_gyroscope(void);
 void power_off_gyroscope(void);
-void enable_button_pressing(bool enable_triple_tap);
+void enable_button_pressing(bool enable_button_tap_flash, bool enable_triple_tap);
 void enable_accelerometer_sampling(void);
 void accelerometer_empty_read(void);
 bool voltage_is_low(void);
-
 /* Flash LED multiple times quickly to show "panic" */
 void led_1_panic(void);
-
 /* Flash LED dimly multiple times to signal low voltage */
 void led_1_low_voltage(void);
+/* Flash LED every chosen amount of seconds determined by the RTC */
+bool flash_led_at_rate(uint8_t seconds);
+/* Flash LED weakly */
+void led_1_weak_flash(void);
+/* Flash LED strongly */
+void led_1_strong_flash(void);
+/* Flash LED for a longer amount of time */
+void led_1_long_flash(void);
 
 void init(void);
 void restart(void);
@@ -157,9 +164,7 @@ uint32_t get_block_offset(const struct SdCardBuffer *const sd_card_buffer);
 bool add_value_to_buffer(struct SdCardBuffer *const sd_card_buffer, uint8_t value);
 bool write_full_buffer_to_sd_card(struct SdCardBuffer *const sd_card_buffer);
 
-/*
- * Only write remainder of buffer for end of file
- */
+/* Only write remainder of buffer for end of file */
 bool write_remaining_buffer_to_sd_card(struct SdCardBuffer *const sd_card_buffer);
 void get_config_settings(void);
 bool button_press_event_handled(void);
@@ -169,12 +174,6 @@ void clear_timer_interrupt(void);
 bool button_interrupt_triggered(void);
 enum ButtonPress get_button_press(bool can_triple_tap);
 enum ButtonPress wait_for_button_release(void);
-/* Flash LED weakly */
-void led_1_weak_flash(void);
-/* Flash LED strongly */
-void led_1_strong_flash(void);
-/* Flash LED for a longer amount of time */
-void led_1_long_flash(void);
 
 /*
  * Define global variables
@@ -204,6 +203,9 @@ enum ButtonPress button_presses[BUTTON_BUFF_SIZE];
 
 /* Whether the user can triple tap */
 bool triple_tap_enabled;
+
+/* Whether there is an indication of a button tap by flashing the LED */
+bool button_tap_flash_enabled;
 
 /* Information for SD FAT library */
 struct fatstruct fatinfo;
@@ -375,7 +377,8 @@ void power_off_gyroscope(void) {
 	power_off(GYRO_PWR);
 }
 
-void enable_button_pressing(bool enable_triple_tap) {
+void enable_button_pressing(bool enable_button_tap_flash, bool enable_triple_tap) {
+	button_tap_flash_enabled = enable_button_tap_flash;
 	triple_tap_enabled = enable_triple_tap;
 	/* Clear button press buffer */
 	clear_button_press_buffer(&button_press_buffer);
@@ -422,12 +425,40 @@ void led_1_low_voltage(void) {
 	for (uint8_t i = 0; i < 20; i++) {
 		if (i % 2 == 0) {
 			led_1_on();
-			for (uint32_t j = 0; j < 0x800; j++) _NOP();
+			LED_FLASH_DELAY(170);
 		} else {
 			led_1_off();
-			for (uint32_t j = 0; j < 0x20000; j++) _NOP();
+			LED_FLASH_DELAY(10922);
 		}
 	}
+	led_1_off();
+}
+
+bool flash_led_at_rate(uint8_t seconds) {
+	if (rtc_rdy()) {
+		if (RTCSEC % seconds == 0 && RTCSEC != 0 && RTCSEC != prev_sec) {
+			prev_sec = RTCSEC;
+			return true;
+		}
+	}
+	return false;
+}
+
+void led_1_weak_flash(void) {
+	led_1_on();
+	LED_FLASH_DELAY(1000);
+	led_1_off();
+}
+
+void led_1_strong_flash(void) {
+	led_1_on();
+	LED_FLASH_DELAY(10000);
+	led_1_off();
+}
+
+void led_1_long_flash(void) {
+	led_1_on();
+	LED_FLASH_DELAY(60000);
 	led_1_off();
 }
 
@@ -497,7 +528,7 @@ enum DeviceState idle(void) {
 	 * We don't want to waste time checking for triple taps when device
 	 * is on as we don't have any features which require triple tapping
 	 */
-	enable_button_pressing(false);
+	enable_button_pressing(true, false);
 	/* Set up the clock to flash the LED */
 	rtc_restart();
 	prev_sec = RTCSEC;
@@ -510,13 +541,18 @@ enum DeviceState turn_off(void) {
 	led_1_off();
 	disable_interrupts();
 	/* We have features which require triple tapping when device is off */
-	enable_button_pressing(true);
+	enable_button_pressing(false, true);
 	enable_interrupts();
 	return OFF_STATE;
 }
 
 enum DeviceState start_logging(void) {
+	/* Turn on power to SD card */
 	power_on_sd();
+	/* Check for low voltage */
+	if (voltage_is_low()) {
+		restart();
+	}
 	/*  
 	 * We parse the config file each time we want to start logging so the user doesn't
 	 * have to restart the device manually each time they modify the config settings.
@@ -525,7 +561,7 @@ enum DeviceState start_logging(void) {
 	 */
 	get_config_settings();
 	disable_interrupts();
-	enable_button_pressing(false);
+	enable_button_pressing(true, false);
 	/* Power on logging devices and activate interrupts */
 	/* Accelerometer is always turned on since we use its interrupt to grab samples */
 	{
@@ -577,13 +613,15 @@ enum DeviceState stop_logging(void) {
 			// TODO logging error
 		}
 	}
+	/* Turn off power to SD card since writing is complete */
+	power_off_sd();
 	return idle();
 }
 
 enum DeviceState format_card(void) {
 	disable_interrupts();
 	/* No triple tapping feature in this state */
-	enable_button_pressing(false);
+	enable_button_pressing(true, false);
 	enable_interrupts();
 	return FORMAT_STATE;
 }
@@ -596,74 +634,70 @@ enum DeviceState off_step(void) {
 	/* Get the button press */
 	enum ButtonPress button_press;
 	bool success = remove_button_press(&button_press_buffer, &button_press);
-#ifdef DEBUG
 	if (!success) {
+#ifdef DEBUG
 		HANG();
-	}
 #endif
-	/* Change state based on button press */
-	switch(button_press) {
-		case BUTTON_TAP:
-			/* Try again for a different type of button press */
-			return turn_off();
-		case BUTTON_HOLD:
-			restart();
-			break;
-		case BUTTON_TRIPLE_TAP:
-			/* Format the SD card */
-			return format_card();
+	} else {
+		/* Change state based on button press */
+		switch(button_press) {
+			case BUTTON_TAP:
+				/* Try again for a different type of button press */
+				return turn_off();
+			case BUTTON_HOLD:
+				restart();
+				break;
+			case BUTTON_TRIPLE_TAP:
+				/* Format the SD card */
+				return format_card();
+		}
 	}
 	return OFF_STATE;
 }
 
 enum DeviceState idle_step(void) {
-	/* Flash LED every predefined amount of seconds */
-	if (rtc_rdy()) {
-		if (RTCSEC % IDLE_FLASH_RATE == 0 && RTCSEC != 0 && RTCSEC != prev_sec) {
-			led_1_weak_flash();
-			prev_sec = RTCSEC;
-		}
+	if (flash_led_at_rate(IDLE_FLASH_RATE)) {
+		led_1_weak_flash();
 	}
 	/* Check for any button presses */
 	if (button_press_buffer.count > 0) {
 		enum ButtonPress button_press;
 		bool success = remove_button_press(&button_press_buffer, &button_press);
-#ifdef DEBUG
 		if (!success) {
+#ifdef DEBUG
 			HANG();
-		}
 #endif
-		switch(button_press) {
-			case BUTTON_TAP:
-				return start_logging();
-			case BUTTON_HOLD:
-				return turn_off();
-				break;
+		} else {
+			switch(button_press) {
+				case BUTTON_TAP:
+					return start_logging();
+				case BUTTON_HOLD:
+					return turn_off();
+					break;
+			}
 		}
 	}
 	return IDLE_STATE;
 }
 
 enum DeviceState log_step(void) {
-	/* Flash LED every predefined amount of seconds */
-	if (rtc_rdy()) {
-		if (RTCSEC % LOG_FLASH_RATE == 0 && RTCSEC != 0 && RTCSEC != prev_sec) {
-			led_1_strong_flash();
-			prev_sec = RTCSEC;
-		}
+#ifndef DEBUG
+	if (flash_led_at_rate(LOG_FLASH_RATE)) {
+		led_1_strong_flash();
 	}
+#endif
 	/* Process samples */
 	// TODO refactor this to its own function but for now...
 	/* Convert all current samples in raw buffer to ascii */
 	uint16_t count = sample_buffer.count;
 #ifdef DEBUG
-//	if (count == 0) {
-//		led_1_off();
-//	} else if (count == RAW_SAMPLE_BUFF_SIZE) {
-//		led_1_on();
-//	} else {
-//		led_1_toggle();
-//	}
+	if (count == 0) {
+		led_1_off();
+	} else if (count == RAW_SAMPLE_BUFF_SIZE) {
+		led_1_on();
+	} else {
+		led_1_toggle();
+	}
 #endif
 	for (uint16_t i = 0; i < count; ++i) {
 		/* Grab a raw accelerometer sample */
@@ -795,55 +829,45 @@ enum DeviceState log_step(void) {
 	if (button_press_buffer.count > 0) {
 		enum ButtonPress button_press;
 		bool success = remove_button_press(&button_press_buffer, &button_press);
-#ifdef DEBUG
 		if (!success) {
+#ifdef DEBUG
 			HANG();
-		}
 #endif
-		switch(button_press) {
-			case BUTTON_TAP:
-			case BUTTON_HOLD:
-				return stop_logging();
+		} else {
+			switch(button_press) {
+				case BUTTON_TAP:
+				case BUTTON_HOLD:
+					return stop_logging();
+			}
 		}
 	}
 	return LOG_STATE;
 }
 
 enum DeviceState format_step(void) {
-//	/* Turn the LED on as indication that we're waiting for a button press */
-//	led_1_on();
-//	/* Wait for button press in low power mode */
-//	enter_LPM();
-//	/* Button press happened, so continue */
-//	exit_LPM();
-//	led_1_off();
-	
-	/* Flash LED every predefined amount of seconds */
-	if (rtc_rdy()) {
-		if (RTCSEC % FORMAT_FLASH_RATE == 0 && RTCSEC != 0 && RTCSEC != prev_sec) {
-			led_1_weak_flash();
-			LED_FLASH_DELAY(30000);
-			led_1_weak_flash();
-			prev_sec = RTCSEC;
-		}
+	if (flash_led_at_rate(FORMAT_FLASH_RATE)) {
+		led_1_weak_flash();
+		LED_FLASH_DELAY(30000);
+		led_1_weak_flash();
 	}
 	/* Check for any button presses */
 	if (button_press_buffer.count > 0) {
 		enum ButtonPress button_press;
 		bool success = remove_button_press(&button_press_buffer, &button_press);
-#ifdef DEBUG
 		if (!success) {
+#ifdef DEBUG
 			HANG();
-		}
 #endif
-		/* Perform action based on button press */
-		switch(button_press) {
-			case BUTTON_TAP:
-				return turn_off();
-				break;
-			case BUTTON_HOLD:
-				format_sd_card();
-				break;
+		} else {
+			/* Perform action based on button press */
+			switch(button_press) {
+				case BUTTON_TAP:
+					return turn_off();
+					break;
+				case BUTTON_HOLD:
+					format_sd_card();
+					break;
+			}
 		}
 	}
 	return FORMAT_STATE;
@@ -1086,7 +1110,7 @@ bool add_value_to_buffer(struct SdCardBuffer *const sd_card_buffer, uint8_t valu
 
 bool write_full_buffer_to_sd_card(struct SdCardBuffer *const sd_card_buffer) {
 	if (sd_card_buffer->index > SD_SAMPLE_BUFF_SIZE) {
-		/* Something went wrong... */
+		/* Something went very wrong... */
 #ifdef DEBUG
 		HANG();
 #endif
@@ -1137,7 +1161,7 @@ bool write_full_buffer_to_sd_card(struct SdCardBuffer *const sd_card_buffer) {
 
 bool write_remaining_buffer_to_sd_card(struct SdCardBuffer *const sd_card_buffer) {
 	if (sd_card_buffer->index > SD_SAMPLE_BUFF_SIZE) {
-		/* Something went wrong... */
+		/* Something went very wrong... */
 #ifdef DEBUG
 		HANG();
 #endif
@@ -1262,30 +1286,6 @@ void get_config_settings(void) {
 	get_user_config(data_sd, &fatinfo);
 }
 
-void led_1_weak_flash(void) {
-	led_1_on();
-	for (uint8_t j = 0; j < CLOCK_SPEED; ++j) {
-		for (uint16_t i = 0; i < 1000; ++i);
-	}
-	led_1_off();
-}
-
-void led_1_strong_flash(void) {
-	led_1_on();
-	for (uint8_t j = 0; j < CLOCK_SPEED; ++j) {
-		for (uint16_t i = 0; i < 10000; ++i);
-	}
-	led_1_off();
-}
-
-void led_1_long_flash(void) {
-	led_1_on();
-	for (uint8_t j = 0; j < CLOCK_SPEED; ++j) {
-		for (uint16_t i = 0; i < 60000; ++i);
-	}
-	led_1_off();
-}
-
 /*
  * Interrupt Service Routine triggered on Timer_A counter overflow
  * Increment high byte of timer (time_cont), using 3 bytes to keep time.
@@ -1307,17 +1307,16 @@ __interrupt void CCR0_ISR(void) {
 #pragma vector = PORT1_VECTOR
 __interrupt void PORT1_ISR(void) {
 	if (button_interrupt_triggered()) {
+		/* Clear the flag */
+		clear_int_ctrl();
 		if (button_press_event_handled()) {
-			/* TODO should we clear the flag before getting button pressed data? */
-			clear_int_ctrl();
-			/* Wake up from low power mode */
-			/* TODO probably does nothing when not in low power mode but should confirm. */
+			/* Wake up from low power mode; does nothing if not in low power mode */
 			LPM3_EXIT;
 			return;
 		}
 	}
 	if (accel_int()) {
-		//clear_int_accel(); //TODO unnecessary?
+		//clear_int_accel(); // TODO unnecessary?
 		if (!sample_event_handled()) {
 			/* Trigger interrupt to try again to capture current sample */
 			set_int_accel();
@@ -1341,7 +1340,9 @@ bool button_press_event_handled(void) {
 	/* Since we successfully received a button press, indicate with the LED */
 	switch(button_press) {
 		case BUTTON_TAP:
-			led_1_strong_flash();
+			if (button_tap_flash_enabled) {
+				led_1_strong_flash();
+			}
 			break;
 		case BUTTON_HOLD:
 			led_1_long_flash();

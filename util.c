@@ -5,27 +5,29 @@
  * and gyroscope user-defined configuration values.
  *
  * The format for config.ini is as follows:
- *     Lines beginning with semicolons are considered comments.
- *     A line that matches /^ar *= *[0-9]+$/ is used to set the range of the
+ *     Text after semicolons is considered a comment.
+ *     A line that matches /^ *sr *= *[0-9]+ *$/ is used to set the sample rate.
+ *         Valid bandwidth values: 40, 160, 640.
+ *     A line that matches /^ *ar *= *[0-9]+ *$/ is used to set the range of the
  *         accelerometer. Valid range values: 2, 6.
- *     A line that matches /^as *= *[0-9]+$/ is used to set the sample rate of
- *         the accelerometer. Valid bandwidth values: 40, 160, 640, 2560.
- *     A line that matches /^gr *= *[0-9]+$/ is used to set the range of the
+ *     A line that matches /^ *gr *= *[0-9]+ *$/ is used to set the range of the
  *         gyroscope. Valid range values: 250, 500, 2000.
- *     A line that matches /^gs *= *[0-9]+$/ is used to set the sample rate of
+ *     A line that matches /^ *gs *= *[0-9]+ *$/ is used to set the sample rate of
  *         the gyroscope. Valid bandwidth values: 100, 200, 400, 800.
+ *     A line that matches /^ *disable_gyro *$/ is used to disable logging for the
+ *         gyroscope.
+ *     A line that matches /^ *disable_accel *$/ is used to disable logging for the
+ *         accelerometer.
  *
- * This file requires SDLIB for use in get_config_values.
+ * This file requires SDFAT for use in get_user_config.
  */
 
 #ifndef _UTILLIB_C
 #define _UTILLIB_C
 
-#include <msp430f5310.h>
 #include <stdint.h>
 #include "sdfat.h"
 #include "util.h"
-#include "main.h"
 
 /* Size of a block in bytes */
 #define BLOCK_SIZE 512
