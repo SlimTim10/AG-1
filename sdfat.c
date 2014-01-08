@@ -35,8 +35,7 @@
 #include "spi.h"
 #include "circuit.h"
 #include "sdfat.h"
-#include "macro.h"
-#include "const.h"
+#include "sdfatutils.h"
 
 /*
  * Return the end index of file name match with string starting at offset.

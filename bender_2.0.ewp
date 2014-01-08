@@ -1785,7 +1785,19 @@
     <name>$PROJ_DIR$\circuit.h</name>
   </file>
   <file>
+    <name>$PROJ_DIR$\config.c</name>
+  </file>
+  <file>
+    <name>$PROJ_DIR$\config.h</name>
+  </file>
+  <file>
     <name>$PROJ_DIR$\const.h</name>
+  </file>
+  <file>
+    <name>$PROJ_DIR$\conversions.c</name>
+  </file>
+  <file>
+    <name>$PROJ_DIR$\conversions.h</name>
   </file>
   <file>
     <name>$PROJ_DIR$\L3G4200D.c</name>
@@ -1827,16 +1839,13 @@
     <name>$PROJ_DIR$\sdfat.h</name>
   </file>
   <file>
+    <name>$PROJ_DIR$\sdfatutils.h</name>
+  </file>
+  <file>
     <name>$PROJ_DIR$\spi.c</name>
   </file>
   <file>
     <name>$PROJ_DIR$\spi.h</name>
-  </file>
-  <file>
-    <name>$PROJ_DIR$\util.c</name>
-  </file>
-  <file>
-    <name>$PROJ_DIR$\util.h</name>
   </file>
 </project>
 

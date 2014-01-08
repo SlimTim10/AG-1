@@ -12,23 +12,33 @@
 #ifndef _MACRO_H
 #define _MACRO_H
 
+/* Uncomment for easier debugging */
+#define DEBUG
+
+/* Update for new firmware versions */
+#define FIRMWARE_NAME			"AG-1"
+#define FIRMWARE_VERSION		"20131225"
+
+/* Name of log files (max. 5 chars) */
+#define FILE_NAME	"DATA"
+
+/* DCO speed (MHz) */
+#define CLOCK_SPEED	12
+
 /* Infinite loop */
-#define HANG()			for (;;);
+#define HANG()	for (;;);
 
-/* Extract bytes from word */
-#define WTOB_L(w)	(uint8_t)w
-#define WTOB_H(w)	(uint8_t)(w >> 8)
+/* Small delay before powering on components */
+#define POWER_ON_DELAY() \
+	for (uint8_t j = 0; j < CLOCK_SPEED; j++) { \
+		for (uint16_t i = 0; i < 5000; i++) __no_operation(); \
+	}
 
-/* Extract bytes from dword */
-#define DTOB_LL(d)	(uint8_t)d
-#define DTOB_LH(d)	(uint8_t)(d >> 8)
-#define DTOB_HL(d)	(uint8_t)(d >> 16)
-#define DTOB_HH(d)	(uint8_t)(d >> 24)
+/* Delay between multiple LED flashes */
+#define LED_FLASH_DELAY(DELAY) \
+	for (uint8_t j = 0; j < CLOCK_SPEED; ++j) { \
+		for (uint16_t i = 0; i < DELAY; ++i) __no_operation(); \
+	}
 
-/* Convert 2 little-endian bytes to word */
-#define BTOW(a, b)	(uint32_t)(a | ((uint32_t)b << 8))
-
-/* Convert 4 little-endian bytes to dword */
-#define BTOD(a, b, c, d)	(uint32_t)(a | ((uint32_t)b << 8) | ((uint32_t)c << 16) | ((uint32_t)d << 24))
 
 #endif

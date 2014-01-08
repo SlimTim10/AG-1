@@ -1,33 +1,17 @@
 /**
  * Written by Tim Johns.
  *
- * Utility functions used to find and parse a config.ini file for accelerometer
- * and gyroscope user-defined configuration values.
- *
- * The format for config.ini is as follows:
- *     Text after semicolons is considered a comment.
- *     A line that matches /^ *sr *= *[0-9]+ *$/ is used to set the sample rate.
- *         Valid bandwidth values: 40, 160, 640.
- *     A line that matches /^ *ar *= *[0-9]+ *$/ is used to set the range of the
- *         accelerometer. Valid range values: 2, 6.
- *     A line that matches /^ *gr *= *[0-9]+ *$/ is used to set the range of the
- *         gyroscope. Valid range values: 250, 500, 2000.
- *     A line that matches /^ *gs *= *[0-9]+ *$/ is used to set the sample rate of
- *         the gyroscope. Valid bandwidth values: 100, 200, 400, 800.
- *     A line that matches /^ *disable_gyro *$/ is used to disable logging for the
- *         gyroscope.
- *     A line that matches /^ *disable_accel *$/ is used to disable logging for the
- *         accelerometer.
- *
- * This file requires SDFAT for use in get_user_config.
+ * Utility functions used to find and parse a config.ini file for user-defined configuration values.
+ * 
+ * Note: depends on SDFAT lib for use in get_user_config.
  */
 
-#ifndef _UTILLIB_C
-#define _UTILLIB_C
+#ifndef _CONFIGLIB_C
+#define _CONFIGLIB_C
 
 #include <stdint.h>
 #include "sdfat.h"
-#include "util.h"
+#include "config.h"
 
 /* Size of a block in bytes */
 #define BLOCK_SIZE 512
@@ -188,39 +172,38 @@ void set_key_only_settings(struct Setting *_key_only_settings, uint8_t _num_key_
 }
 
 void get_user_config(uint8_t *data, struct fatstruct *info) {
-	uint32_t i, j, k;
 	uint32_t config_file_offset = 0; // Offset of first block with file's data
 	
 	/* Read first block of directory table */
 	read_block(data, info->dtoffset, SD_LONG_TIMEOUT);
 
 	/* Find config.ini file in directory table */
-	for (	i = 0;
-			i < info->dtsize &&
-			config_file_offset == 0 &&
-			data[0] != 0x00;
-			i += 512) {
+	for (uint32_t i = 0; i < info->dtsize && config_file_offset == 0 && data[0] != 0x00; i += 512) {
 		read_block(data, info->dtoffset + i, SD_LONG_TIMEOUT);
-		for (j = 0; j < 512; j += 32) {
+		for (uint32_t j = 0; j < 512; j += 32) {
 			/* Deleted file */
 			if (data[j] == 0xE5) continue;
 			/* End of directory table entries */
 			if (data[j] == 0x00) break;
-
-			k = j;
-			if (data[k] == 'C') { k++; if (data[k] == 'O') { k++;
-			if (data[k] == 'N') { k++; if (data[k] == 'F') { k++;
-			if (data[k] == 'I') { k++; if (data[k] == 'G') { k++;
-			if (data[k] == ' ') { k++; if (data[k] == ' ') { k++;
-			if (data[k] == 'I') { k++; if (data[k] == 'N') { k++;
-			if (data[k] == 'I') {
+			/* Check for config.ini file */
+			if (data[j] == 'C'
+				&& data[j + 1] == 'O'
+				&& data[j + 2] == 'N'
+				&& data[j + 3] == 'F'
+				&& data[j + 4] == 'I'
+				&& data[j + 5] == 'G'
+				&& data[j + 6] == ' '
+				&& data[j + 7] == ' '
+				&& data[j + 8] == 'I'
+				&& data[j + 9] == 'N'
+				&& data[j + 10] == 'I') {
 				/* config.ini entry found. Store starting cluster */
-				config_file_offset = info->fileclustoffset +
-									 (((uint8_t)(data[j+27] << 8) +
-									 (uint8_t)(data[j+26]) - 2) *
-									 info->nbytesinclust);
+				config_file_offset = info->fileclustoffset + 
+										(((uint8_t)(data[j + 27] << 8) +
+										(uint8_t)data[j + 26] - 2) *
+										info->nbytesinclust);
 				break;
-			}}}}}}}}}}}
+			}
 		}
 	}
 

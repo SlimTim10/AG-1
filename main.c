@@ -1,5 +1,21 @@
 /**
  * Written by Icewire Technologies.
+ *
+ *
+ * The format for config.ini is as follows:
+ *     Text after semicolons is considered a comment.
+ *     A line that matches /^ *sr *= *[0-9]+ *$/ is used to set the sample rate.
+ *         Valid bandwidth values: 40, 160, 640.
+ *     A line that matches /^ *ar *= *[0-9]+ *$/ is used to set the range of the
+ *         accelerometer. Valid range values: 2, 6.
+ *     A line that matches /^ *gr *= *[0-9]+ *$/ is used to set the range of the
+ *         gyroscope. Valid range values: 250, 500, 2000.
+ *     A line that matches /^ *gs *= *[0-9]+ *$/ is used to set the sample rate of
+ *         the gyroscope. Valid bandwidth values: 100, 200, 400, 800.
+ *     A line that matches /^ *disable_gyro *$/ is used to disable logging for the
+ *         gyroscope.
+ *     A line that matches /^ *disable_accel *$/ is used to disable logging for the
+ *         accelerometer.
  */
 
 #include <msp430f5310.h>
@@ -9,81 +25,22 @@
 #include "sdfat.h"
 #include "LIS3LV02DL.h"
 #include "L3G4200D.h"
-#include "util.h"
+#include "config.h"
 #include "msp430f5310_extra.h"
 #include "circuit.h"
 #include "samplebuffer.h"
 #include "buttonbuffer.h"
+#include "const.h"
+#include "macro.h"
+#include "conversions.h"
 
-/* Uncomment for easier debugging */
-// TODO uncomment to test for release as well as
-// add more feed_watchdog() functions
-#define DEBUG
-
-/* Update for new firmware versions */
-#define FIRMWARE_NAME			"AG-1"
-#define FIRMWARE_VERSION		"20131225"
-
-/* Name of log files (max. 5 chars) */
-#define FILE_NAME	"DATA"
-
-/* DCO speed (MHz) */
-#define CLOCK_SPEED		12
-
-/* Infinite loop */
-#define HANG()			for (;;);
-
-/* Small delay before powering on components */
-#define POWER_ON_DELAY() \
-	for (uint8_t j = 0; j < CLOCK_SPEED; j++) { \
-		for (uint16_t i = 0; i < 5000; i++) __no_operation(); \
-	}
-
-/* Delay between multiple LED flashes */
-#define LED_FLASH_DELAY(DELAY) \
-	for (uint8_t j = 0; j < CLOCK_SPEED; ++j) { \
-		for (uint16_t i = 0; i < DELAY; ++i) __no_operation(); \
-	}
-
-/* Amount of time between LED flashes in seconds when idle */
-enum { IDLE_FLASH_RATE = 4 };
-
-/* Amount of time between LED flashes in seconds when logging */
-enum { LOG_FLASH_RATE = 1 };
-
-/* Amount of time between LED flashes in seconds when waiting for format action */
-enum { FORMAT_FLASH_RATE = 1 };
-
-/* Size of raw data buffers */
-//enum { RAW_SAMPLE_BUFF_SIZE = 250 };
-enum { RAW_SAMPLE_BUFF_SIZE = 217 };
-//enum { RAW_SAMPLE_BUFF_SIZE = 149 };
-
-/* Should be a multiple of SD card write block (512B) */
-//enum { SD_SAMPLE_BUFF_SIZE = 512 };
-enum { SD_SAMPLE_BUFF_SIZE = 1024 };
-//enum { SD_SAMPLE_BUFF_SIZE = 2048 };
-
-/* 1B */
-enum { BUTTON_BUFF_SIZE = 1 };
-
-/* Time (in cycles) to wait for button debouncing */
-enum { BUTTON_DEBOUNCE_TIME = 0x1000 };
-
-/* Time (in seconds) to detect a held button press */
-enum { BUTTON_HOLD_TIME = 2 };
-
-/* Time (in seconds) to detect a successive button press */
-enum { BUTTON_TIME_WINDOW = 1 };
-
-/* ASCII character used as delimiter for logger data */
-enum { DELIMITER = ',' };
-
-/* ASCII character used to indicate that the next character starts on a new line */
-enum { NEW_LINE = '\n' };
-
-/* Indicates the end of a character array */
-enum { NULL_TERMINATOR = '\0' };
+/*
+ * Define global debugging variables
+ */
+#ifdef DEBUG
+bool debug_hit = false;
+uint32_t debug_int = 0;
+#endif
 
 /* Possible states of the device */
 enum DeviceState {
@@ -101,8 +58,7 @@ struct Logger {
 };
 
 /* Buffer of data to write to SD card */
-// TODO rename to SdCardFile or something
-struct SdCardBuffer {
+struct SdCardFile {
 	uint8_t buffer[SD_SAMPLE_BUFF_SIZE];
 	/* Current index in buffer */
 	uint16_t index;
@@ -156,17 +112,18 @@ enum DeviceState off_step(void);
 enum DeviceState idle_step(void);
 enum DeviceState log_step(void);
 enum DeviceState format_step(void);
-void init_sd_card(void);
+void init_sd_fat(void);
 void format_sd_card(void);
-void new_sd_card_file(struct SdCardBuffer *const sd_card_buffer);
-void add_firmware_info_to_sd_card_file(struct SdCardBuffer *const sd_card_buffer);
-uint32_t get_block_offset(const struct SdCardBuffer *const sd_card_buffer);
-bool add_value_to_buffer(struct SdCardBuffer *const sd_card_buffer, uint8_t value);
-bool write_full_buffer_to_sd_card(struct SdCardBuffer *const sd_card_buffer);
+void new_sd_card_file(struct SdCardFile *const sd_card_file);
+void add_firmware_info_to_sd_card_file(struct SdCardFile *const sd_card_file);
+uint32_t get_block_offset(const struct SdCardFile *const sd_card_file);
+bool add_value_to_buffer(struct SdCardFile *const sd_card_file, uint8_t value);
+bool write_full_buffer_to_sd_card(struct SdCardFile *const sd_card_file);
 
 /* Only write remainder of buffer for end of file */
-bool write_remaining_buffer_to_sd_card(struct SdCardBuffer *const sd_card_buffer);
+bool write_remaining_buffer_to_sd_card(struct SdCardFile *const sd_card_file);
 void get_config_settings(void);
+void timer_interrupt_event(void);
 bool button_press_event_handled(void);
 bool sample_event_handled(void);
 bool timer_interrupt_triggered(void);
@@ -174,14 +131,6 @@ void clear_timer_interrupt(void);
 bool button_interrupt_triggered(void);
 enum ButtonPress get_button_press(bool can_triple_tap);
 enum ButtonPress wait_for_button_release(void);
-
-/*
- * Define global variables
- */
-#ifdef DEBUG
-uint32_t debug_int = 0;
-bool debug_hit = false;
-#endif
 
 /* High byte for continuous timer */
 uint8_t time_cont;
@@ -211,9 +160,9 @@ bool button_tap_flash_enabled;
 struct fatstruct fatinfo;
 
 /* Buffer for accelerometer sample data to write to SD card */
-struct SdCardBuffer sd_buff;
+struct SdCardFile sd_file;
 
-/* Temporary variable for initializing the SD card using an SdCardBuffer's buffer */
+/* Temporary variable for initializing the SD card using an SdCardFile's buffer */
 uint8_t *data_sd;
 
 /* Accelerometer settings */
@@ -224,84 +173,6 @@ struct Logger gyroscope;
 
 /* So that the LED doesn't flash multiple times per second */
 uint8_t prev_sec = 0;
-
-/*
- * C++ version 0.4 char* style "itoa":
- * Original written by Lukas Chmela
- * Released under GPLv3.
- */
-uint8_t* itoa(int32_t value, uint8_t* result);
-
-uint8_t* itoa(int32_t value, uint8_t* result) {
-	uint8_t* ptr = result, *ptr1 = result, tmp_char;
-	int32_t tmp_value;
-	uint8_t base = 10;
-
-	do {
-		tmp_value = value;
-		value /= base;
-		*ptr++ = "9876543210123456789" [9 + (tmp_value - value * base)];
-	} while (value);
-
-	/* Apply negative sign */
-	if (tmp_value < 0) *ptr++ = '-';
-	*ptr-- = NULL_TERMINATOR;
-	while(ptr1 < ptr) {
-		tmp_char = *ptr;
-		*ptr-- = *ptr1;
-		*ptr1++ = tmp_char;
-	}
-	return result;
-}
-
-/* Adapted from the itoa function */
-uint8_t* uitoa(uint32_t value, uint8_t* result);
-
-uint8_t* uitoa(uint32_t value, uint8_t* result) {
-	uint8_t* ptr = result, *ptr1 = result, tmp_char;
-	uint32_t tmp_value;
-	uint8_t base = 10;
-	
-	do {
-		tmp_value = value;
-		value /= base;
-		*ptr++ = "0123456789" [(tmp_value - value * base)];
-	} while (value);
-	
-	*ptr-- = NULL_TERMINATOR;
-	while(ptr1 < ptr) {
-		tmp_char = *ptr;
-		*ptr-- = *ptr1;
-		*ptr1++ = tmp_char;
-	}
-	return result;
-}
-
-/* Convert a 16 bit signed number from a two-byte array */
-int16_t int8arr_to_int16(uint8_t *value);
-
-int16_t int8arr_to_int16(uint8_t *value) {
-	int16_t result = ((uint16_t)*value << 8) | *(value + 1);
-	return result;
-	
-//	// TODO old method; see TODO below
-//	int32_t result = (value[0] << 8) | value[1];
-//	/* Check whether the number is negative by two's complement */
-//	if (result >= 32768) {
-//		// TODO why -0 instead of -32768? Might have to change function name...
-//		result = -((~result + 1) & 0x7FFF);
-//	}
-//	return result;
-}
-
-/*
- * Convert a 32 bit unsigned number from a three-byte array where the high
- * byte is padding
- */
-uint32_t int8arr_to_uint32(uint8_t *value) {
-	uint32_t result = ((uint32_t)*value << 16) | ((uint16_t)*(value + 1) << 8) | *(value + 2);
-	return result;
-}
 
 void start_watchdog(void) {
 #ifndef DEBUG
@@ -320,7 +191,6 @@ void feed_watchdog(void) {
 }
 
 void power_on_sd(void) {
-	feed_watchdog();
 	power_on(SD_PWR);
 	/* Needs a delay to complete powering-on */
 	POWER_ON_DELAY();
@@ -338,7 +208,6 @@ void power_off_sd(void) {
 }
 
 void power_on_accelerometer(void) {
-	feed_watchdog();
 	power_on(ACCEL_PWR);
 	/* Needs a delay to complete powering-on */
 	POWER_ON_DELAY();
@@ -359,7 +228,6 @@ void power_off_accelerometer(void) {
 }
 
 void power_on_gyroscope(void) {
-	feed_watchdog();
 	power_on(GYRO_PWR);
 	/* Needs a delay to complete powering-on */
 	POWER_ON_DELAY();
@@ -494,7 +362,7 @@ void init(void) {
 	construct_sample_buffer(&sample_buffer, samples, RAW_SAMPLE_BUFF_SIZE);
 	construct_button_press_buffer(&button_press_buffer, button_presses, BUTTON_BUFF_SIZE);
 	/* Point pointer to buffer */
-	data_sd = sd_buff.buffer;
+	data_sd = sd_file.buffer;
 	/* Watchdog timer is on by default */
 	stop_watchdog();
 	/* Set up and configure the clock */
@@ -507,8 +375,6 @@ void init(void) {
 	spi_config();
 	/* Start the watchdog */
 	start_watchdog();
-	/* Initialize the SD card */
-	init_sd_card();
 	/* Deactivate all interrupts */
 	deactivate_interrupts();
 	/* Start the timer */
@@ -521,38 +387,50 @@ void restart(void) {
 }
 
 enum DeviceState idle(void) {
+	feed_watchdog();
 	/* Make sure the LED is off */
 	led_1_off();
 	disable_interrupts();
+	feed_watchdog();
 	/*
 	 * We don't want to waste time checking for triple taps when device
 	 * is on as we don't have any features which require triple tapping
 	 */
 	enable_button_pressing(true, false);
+	feed_watchdog();
 	/* Set up the clock to flash the LED */
 	rtc_restart();
 	prev_sec = RTCSEC;
+	feed_watchdog();
 	enable_interrupts();
 	return IDLE_STATE;
 }
 
 enum DeviceState turn_off(void) {
+	feed_watchdog();
 	/* Make sure the LED is off */
 	led_1_off();
 	disable_interrupts();
 	/* We have features which require triple tapping when device is off */
+	feed_watchdog();
 	enable_button_pressing(false, true);
+	feed_watchdog();
 	enable_interrupts();
 	return OFF_STATE;
 }
 
 enum DeviceState start_logging(void) {
-	/* Turn on power to SD card */
+	feed_watchdog();
+	/* Turn on power to SD card and read the FAT boot sector */
 	power_on_sd();
+	feed_watchdog();
+	init_sd_fat();
+	feed_watchdog();
 	/* Check for low voltage */
 	if (voltage_is_low()) {
 		restart();
 	}
+	feed_watchdog();
 	/*  
 	 * We parse the config file each time we want to start logging so the user doesn't
 	 * have to restart the device manually each time they modify the config settings.
@@ -561,76 +439,92 @@ enum DeviceState start_logging(void) {
 	 */
 	get_config_settings();
 	disable_interrupts();
+	feed_watchdog();
 	enable_button_pressing(true, false);
 	/* Power on logging devices and activate interrupts */
+	feed_watchdog();
 	/* Accelerometer is always turned on since we use its interrupt to grab samples */
 	{
 		power_on_accelerometer();
 		enable_accelerometer_sampling();
 	}
+	feed_watchdog();
 	if (gyroscope.is_enabled) {
 		power_on_gyroscope();
 	}
-	new_sd_card_file(&sd_buff);
+	feed_watchdog();
+	new_sd_card_file(&sd_file);
+	feed_watchdog();
 	/* Clear raw samples buffer */
 	clear_sample_buffer(&sample_buffer);
 	/* Reset timer */
 	time_cont = 0;
 	/* Reset time of last sample */
 	timestamp_accel = 0;
+	feed_watchdog();
 	/* Set up the clock to flash the LED */
 	rtc_restart();
 	prev_sec = RTCSEC;
+	feed_watchdog();
 	/* Start capturing samples */
 	enable_interrupts();
 	return LOG_STATE;
 }
 
 enum DeviceState stop_logging(void) {
+	feed_watchdog();
 	/* Power off logging devices */
 	{
 		power_off_accelerometer();
 	}
+	feed_watchdog();
 	if (gyroscope.is_enabled) {
 		power_off_gyroscope();
 	}
+	feed_watchdog();
 	/* Write final logger data in buffer and update the directory table */
 	{
-		write_remaining_buffer_to_sd_card(&sd_buff);
+		write_remaining_buffer_to_sd_card(&sd_file);
 		/* Name of log file */
 		uint8_t file_name[] = FILE_NAME;
 		/* Get the number of the last log file */
-		uint16_t file_num = get_file_num(sd_buff.buffer, &fatinfo, file_name);
-		if (update_dir_table(sd_buff.buffer, 
+		uint16_t file_num = get_file_num(sd_file.buffer, &fatinfo, file_name);
+		if (update_dir_table(sd_file.buffer, 
 									&fatinfo, 
-									sd_buff.start_cluster, 
-									sd_buff.size,
+									sd_file.start_cluster, 
+									sd_file.size,
 									file_name,
 									file_num) != FAT_SUCCESS) {
-#ifdef DEBUG
+			/* Turn the LED on and hang to indicate failure */
+			led_1_on();
 			HANG();
-#endif
-			// TODO logging error
 		}
 	}
+	feed_watchdog();
 	/* Turn off power to SD card since writing is complete */
 	power_off_sd();
 	return idle();
 }
 
 enum DeviceState format_card(void) {
+	feed_watchdog();
 	disable_interrupts();
 	/* No triple tapping feature in this state */
 	enable_button_pressing(true, false);
+	feed_watchdog();
 	enable_interrupts();
 	return FORMAT_STATE;
 }
 
 enum DeviceState off_step(void) {
+	/* Turn off the wdt before entering low power mode */
+	stop_watchdog();
 	/* Wait for button press in low power mode */
 	enter_LPM();
 	/* Button press happened, so continue */
 	exit_LPM();
+	/* Turn on the wdt after exiting low power mode */
+	start_watchdog();
 	/* Get the button press */
 	enum ButtonPress button_press;
 	bool success = remove_button_press(&button_press_buffer, &button_press);
@@ -673,7 +567,6 @@ enum DeviceState idle_step(void) {
 					return start_logging();
 				case BUTTON_HOLD:
 					return turn_off();
-					break;
 			}
 		}
 	}
@@ -681,6 +574,10 @@ enum DeviceState idle_step(void) {
 }
 
 enum DeviceState log_step(void) {
+	/* Check for low voltage */
+	if (voltage_is_low()) {
+		return stop_logging();
+	}
 #ifndef DEBUG
 	if (flash_led_at_rate(LOG_FLASH_RATE)) {
 		led_1_strong_flash();
@@ -710,7 +607,7 @@ enum DeviceState log_step(void) {
 		} else {
 			// TODO dear god, refactor this...
 			/* Sample is written on a new line */
-			if (!add_value_to_buffer(&sd_buff, NEW_LINE)) {
+			if (!add_value_to_buffer(&sd_file, NEW_LINE)) {
 				return stop_logging();
 			}
 			/* Convert delta time to ascii and put in SD card buffer */
@@ -720,14 +617,14 @@ enum DeviceState log_step(void) {
 				uint8_t ascii_buffer[8];
 				uitoa(delta_time, ascii_buffer);
 				for (uint8_t i = 0; ascii_buffer[i] != NULL_TERMINATOR && i < 8; ++i) {
-					if (!add_value_to_buffer(&sd_buff, ascii_buffer[i])) {
+					if (!add_value_to_buffer(&sd_file, ascii_buffer[i])) {
 						return stop_logging();
 					}
 				}
 			}
 			if (accelerometer.is_enabled) {
 				/* Add delimiter */
-				if (!add_value_to_buffer(&sd_buff, DELIMITER)) {
+				if (!add_value_to_buffer(&sd_file, DELIMITER)) {
 					return stop_logging();
 				}
 				/* Convert axes to ascii and put in SD card buffer */
@@ -739,13 +636,13 @@ enum DeviceState log_step(void) {
 						int16_t x_axis = int8arr_to_int16(sample.accel.x_axis);
 						itoa(x_axis, ascii_buffer);
 						for (uint8_t i = 0; ascii_buffer[i] != NULL_TERMINATOR && i < 6; ++i) {
-							if (!add_value_to_buffer(&sd_buff, ascii_buffer[i])) {
+							if (!add_value_to_buffer(&sd_file, ascii_buffer[i])) {
 								return stop_logging();
 							}
 						}
 					}
 					/* Add delimiter */
-					if (!add_value_to_buffer(&sd_buff, DELIMITER)) {
+					if (!add_value_to_buffer(&sd_file, DELIMITER)) {
 						return stop_logging();
 					}
 					/* Y-axis */
@@ -753,13 +650,13 @@ enum DeviceState log_step(void) {
 						int16_t y_axis = int8arr_to_int16(sample.accel.y_axis);
 						itoa(y_axis, ascii_buffer);
 						for (uint8_t i = 0; ascii_buffer[i] != NULL_TERMINATOR && i < 6; ++i) {
-							if (!add_value_to_buffer(&sd_buff, ascii_buffer[i])) {
+							if (!add_value_to_buffer(&sd_file, ascii_buffer[i])) {
 								return stop_logging();
 							}
 						}
 					}
 					/* Add delimiter */
-					if (!add_value_to_buffer(&sd_buff, DELIMITER)) {
+					if (!add_value_to_buffer(&sd_file, DELIMITER)) {
 						return stop_logging();
 					}
 					/* Z-axis */
@@ -767,7 +664,7 @@ enum DeviceState log_step(void) {
 						int16_t z_axis = int8arr_to_int16(sample.accel.z_axis);
 						itoa(z_axis, ascii_buffer);
 						for (uint8_t i = 0; ascii_buffer[i] != NULL_TERMINATOR && i < 6; ++i) {
-							if (!add_value_to_buffer(&sd_buff, ascii_buffer[i])) {
+							if (!add_value_to_buffer(&sd_file, ascii_buffer[i])) {
 								return stop_logging();
 							}
 						}
@@ -776,7 +673,7 @@ enum DeviceState log_step(void) {
 			}
 			if (gyroscope.is_enabled) {
 				/* Add delimiter */
-				if (!add_value_to_buffer(&sd_buff, DELIMITER)) {
+				if (!add_value_to_buffer(&sd_file, DELIMITER)) {
 					return stop_logging();
 				}
 				/* Convert axes to ascii and put in SD card buffer */
@@ -788,13 +685,13 @@ enum DeviceState log_step(void) {
 						int16_t x_axis = int8arr_to_int16(sample.gyro.x_axis);
 						itoa(x_axis, ascii_buffer);
 						for (uint8_t i = 0; ascii_buffer[i] != NULL_TERMINATOR && i < 6; ++i) {
-							if (!add_value_to_buffer(&sd_buff, ascii_buffer[i])) {
+							if (!add_value_to_buffer(&sd_file, ascii_buffer[i])) {
 								return stop_logging();
 							}
 						}
 					}
 					/* Add delimiter */
-					if (!add_value_to_buffer(&sd_buff, DELIMITER)) {
+					if (!add_value_to_buffer(&sd_file, DELIMITER)) {
 						return stop_logging();
 					}
 					/* Y-axis */
@@ -802,13 +699,13 @@ enum DeviceState log_step(void) {
 						int16_t y_axis = int8arr_to_int16(sample.gyro.y_axis);
 						itoa(y_axis, ascii_buffer);
 						for (uint8_t i = 0; ascii_buffer[i] != NULL_TERMINATOR && i < 6; ++i) {
-							if (!add_value_to_buffer(&sd_buff, ascii_buffer[i])) {
+							if (!add_value_to_buffer(&sd_file, ascii_buffer[i])) {
 								return stop_logging();
 							}
 						}
 					}
 					/* Add delimiter */
-					if (!add_value_to_buffer(&sd_buff, DELIMITER)) {
+					if (!add_value_to_buffer(&sd_file, DELIMITER)) {
 						return stop_logging();
 					}
 					/* Z-axis */
@@ -816,7 +713,7 @@ enum DeviceState log_step(void) {
 						int16_t z_axis = int8arr_to_int16(sample.gyro.z_axis);
 						itoa(z_axis, ascii_buffer);
 						for (uint8_t i = 0; ascii_buffer[i] != NULL_TERMINATOR && i < 6; ++i) {
-							if (!add_value_to_buffer(&sd_buff, ascii_buffer[i])) {
+							if (!add_value_to_buffer(&sd_file, ascii_buffer[i])) {
 								return stop_logging();
 							}
 						}
@@ -863,7 +760,6 @@ enum DeviceState format_step(void) {
 			switch(button_press) {
 				case BUTTON_TAP:
 					return turn_off();
-					break;
 				case BUTTON_HOLD:
 					format_sd_card();
 					break;
@@ -873,17 +769,13 @@ enum DeviceState format_step(void) {
 	return FORMAT_STATE;
 }
 
-void init_sd_card(void) {
-	/* Turn on power to SD Card during initialization */
-	power_on_sd();
-	feed_watchdog();
+void init_sd_fat(void) {
 	/* Find and read the FAT16 boot sector */
 	if (valid_boot_sector(data_sd, &fatinfo) != FAT_SUCCESS) {
 		/* Turn the LED on and hang to indicate failure */
 		led_1_on();
 		HANG();
 	}
-	feed_watchdog();
 	/* Parse the FAT16 boot sector */
 	if (parse_boot_sector(data_sd, &fatinfo) != FAT_SUCCESS) {
 		/* Show failure with LED 1  */
@@ -891,225 +783,230 @@ void init_sd_card(void) {
 		/* Restart upon failure */
 		restart();
 	}
-	/* Turn back off power to SD card since initialization is complete */
-	power_off_sd();
 }
 
 void format_sd_card(void) {
-	/* Turn on power to SD Card */
+	feed_watchdog();
+	/* Turn on power to SD card */
 	power_on_sd();
+	feed_watchdog();
+	init_sd_fat();
+	feed_watchdog();
 	/* Check for low voltage */
 	if (voltage_is_low()) {
 		restart();
 	}
+	feed_watchdog();
 	/* Format the SD card, using LED 1 to indicate it's being formatted */
 	format_sd(data_sd, &fatinfo, led_1_on, led_1_toggle, led_1_off);
 	restart();
 }
 
-void new_sd_card_file(struct SdCardBuffer *const sd_card_buffer) {
-	sd_card_buffer->start_cluster = find_cluster(sd_card_buffer->buffer, &fatinfo);
+void new_sd_card_file(struct SdCardFile *const sd_card_file) {
+	sd_card_file->start_cluster = find_cluster(sd_card_file->buffer, &fatinfo);
 	/* The SD card is full */
-	if (!sd_card_buffer->start_cluster) {
-#ifdef DEBUG
+	if (!sd_card_file->start_cluster) {
+		/* Turn the LED on and hang to indicate failure */
+		led_1_on();
 		HANG();
-#endif
-		// TODO SD card full
 	}
-	sd_card_buffer->index = 0;
-	sd_card_buffer->cluster = sd_card_buffer->start_cluster;
-	sd_card_buffer->block_num = 0;
-	sd_card_buffer->size = 0;
+	sd_card_file->index = 0;
+	sd_card_file->cluster = sd_card_file->start_cluster;
+	sd_card_file->block_num = 0;
+	sd_card_file->size = 0;
 	/* Firmware info */
-	add_firmware_info_to_sd_card_file(sd_card_buffer);
-	sd_card_buffer->buffer[sd_card_buffer->index++] = NEW_LINE;
+	add_firmware_info_to_sd_card_file(sd_card_file);
+	sd_card_file->buffer[sd_card_file->index++] = NEW_LINE;
+//	feed_watchdog();
 	/* Sample rate */
-	sd_card_buffer->buffer[sd_card_buffer->index++] = 's';
-	sd_card_buffer->buffer[sd_card_buffer->index++] = 'a';
-	sd_card_buffer->buffer[sd_card_buffer->index++] = 'm';
-	sd_card_buffer->buffer[sd_card_buffer->index++] = 'p';
-	sd_card_buffer->buffer[sd_card_buffer->index++] = 'l';
-	sd_card_buffer->buffer[sd_card_buffer->index++] = 'e';
-	sd_card_buffer->buffer[sd_card_buffer->index++] = '-';
-	sd_card_buffer->buffer[sd_card_buffer->index++] = 'r';
-	sd_card_buffer->buffer[sd_card_buffer->index++] = 'a';
-	sd_card_buffer->buffer[sd_card_buffer->index++] = 't';
-	sd_card_buffer->buffer[sd_card_buffer->index++] = 'e';
-	sd_card_buffer->buffer[sd_card_buffer->index++] = ':';
-	sd_card_buffer->buffer[sd_card_buffer->index++] = ' ';
+	sd_card_file->buffer[sd_card_file->index++] = 's';
+	sd_card_file->buffer[sd_card_file->index++] = 'a';
+	sd_card_file->buffer[sd_card_file->index++] = 'm';
+	sd_card_file->buffer[sd_card_file->index++] = 'p';
+	sd_card_file->buffer[sd_card_file->index++] = 'l';
+	sd_card_file->buffer[sd_card_file->index++] = 'e';
+	sd_card_file->buffer[sd_card_file->index++] = '-';
+	sd_card_file->buffer[sd_card_file->index++] = 'r';
+	sd_card_file->buffer[sd_card_file->index++] = 'a';
+	sd_card_file->buffer[sd_card_file->index++] = 't';
+	sd_card_file->buffer[sd_card_file->index++] = 'e';
+	sd_card_file->buffer[sd_card_file->index++] = ':';
+	sd_card_file->buffer[sd_card_file->index++] = ' ';
 	/* Convert the sample rate to ascii */
 	{
 		uint8_t ascii_buffer[3];
 		itoa(bandwidth_bits_to_hz_accel(accelerometer.bandwidth), ascii_buffer);
 		for (uint8_t i = 0; ascii_buffer[i] != NULL_TERMINATOR && i < 3; ++i) {
-			sd_card_buffer->buffer[sd_card_buffer->index++] = ascii_buffer[i];
+			sd_card_file->buffer[sd_card_file->index++] = ascii_buffer[i];
 		}
 	}
-	sd_card_buffer->buffer[sd_card_buffer->index++] = ' ';
-	sd_card_buffer->buffer[sd_card_buffer->index++] = 'H';
-	sd_card_buffer->buffer[sd_card_buffer->index++] = 'z';
-	sd_card_buffer->buffer[sd_card_buffer->index++] = NEW_LINE;
+	sd_card_file->buffer[sd_card_file->index++] = ' ';
+	sd_card_file->buffer[sd_card_file->index++] = 'H';
+	sd_card_file->buffer[sd_card_file->index++] = 'z';
+	sd_card_file->buffer[sd_card_file->index++] = NEW_LINE;
+//	feed_watchdog();
 	/* Range setting */
 	if (accelerometer.is_enabled) {
-		sd_card_buffer->buffer[sd_card_buffer->index++] = 'a';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = 'c';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = 'c';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = 'e';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = 'l';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = ' ';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = 'r';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = 'a';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = 'n';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = 'g';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = 'e';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = ':';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = ' ';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = '+';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = '/';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = '-';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = range_bits_to_g_accel(accelerometer.range) + 0x30;
-		sd_card_buffer->buffer[sd_card_buffer->index++] = ' ';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = 'g';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = ' ';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = '(';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = '+';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = '/';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = '-';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = '3';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = '2';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = '7';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = '6';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = '8';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = ')';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = NEW_LINE;
+		sd_card_file->buffer[sd_card_file->index++] = 'a';
+		sd_card_file->buffer[sd_card_file->index++] = 'c';
+		sd_card_file->buffer[sd_card_file->index++] = 'c';
+		sd_card_file->buffer[sd_card_file->index++] = 'e';
+		sd_card_file->buffer[sd_card_file->index++] = 'l';
+		sd_card_file->buffer[sd_card_file->index++] = ' ';
+		sd_card_file->buffer[sd_card_file->index++] = 'r';
+		sd_card_file->buffer[sd_card_file->index++] = 'a';
+		sd_card_file->buffer[sd_card_file->index++] = 'n';
+		sd_card_file->buffer[sd_card_file->index++] = 'g';
+		sd_card_file->buffer[sd_card_file->index++] = 'e';
+		sd_card_file->buffer[sd_card_file->index++] = ':';
+		sd_card_file->buffer[sd_card_file->index++] = ' ';
+		sd_card_file->buffer[sd_card_file->index++] = '+';
+		sd_card_file->buffer[sd_card_file->index++] = '/';
+		sd_card_file->buffer[sd_card_file->index++] = '-';
+		sd_card_file->buffer[sd_card_file->index++] = range_bits_to_g_accel(accelerometer.range) + 0x30;
+		sd_card_file->buffer[sd_card_file->index++] = ' ';
+		sd_card_file->buffer[sd_card_file->index++] = 'g';
+		sd_card_file->buffer[sd_card_file->index++] = ' ';
+		sd_card_file->buffer[sd_card_file->index++] = '(';
+		sd_card_file->buffer[sd_card_file->index++] = '+';
+		sd_card_file->buffer[sd_card_file->index++] = '/';
+		sd_card_file->buffer[sd_card_file->index++] = '-';
+		sd_card_file->buffer[sd_card_file->index++] = '3';
+		sd_card_file->buffer[sd_card_file->index++] = '2';
+		sd_card_file->buffer[sd_card_file->index++] = '7';
+		sd_card_file->buffer[sd_card_file->index++] = '6';
+		sd_card_file->buffer[sd_card_file->index++] = '8';
+		sd_card_file->buffer[sd_card_file->index++] = ')';
+		sd_card_file->buffer[sd_card_file->index++] = NEW_LINE;
 	}
 	if (gyroscope.is_enabled) {
-		sd_card_buffer->buffer[sd_card_buffer->index++] = 'g';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = 'y';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = 'r';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = 'o';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = ' ';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = 'r';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = 'a';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = 'n';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = 'g';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = 'e';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = ':';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = ' ';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = '+';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = '/';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = '-';
+		sd_card_file->buffer[sd_card_file->index++] = 'g';
+		sd_card_file->buffer[sd_card_file->index++] = 'y';
+		sd_card_file->buffer[sd_card_file->index++] = 'r';
+		sd_card_file->buffer[sd_card_file->index++] = 'o';
+		sd_card_file->buffer[sd_card_file->index++] = ' ';
+		sd_card_file->buffer[sd_card_file->index++] = 'r';
+		sd_card_file->buffer[sd_card_file->index++] = 'a';
+		sd_card_file->buffer[sd_card_file->index++] = 'n';
+		sd_card_file->buffer[sd_card_file->index++] = 'g';
+		sd_card_file->buffer[sd_card_file->index++] = 'e';
+		sd_card_file->buffer[sd_card_file->index++] = ':';
+		sd_card_file->buffer[sd_card_file->index++] = ' ';
+		sd_card_file->buffer[sd_card_file->index++] = '+';
+		sd_card_file->buffer[sd_card_file->index++] = '/';
+		sd_card_file->buffer[sd_card_file->index++] = '-';
 		/* Convert the range to ascii */
 		{
 			uint8_t ascii_buffer[4];
 			itoa(range_bits_to_dps_gyro(gyroscope.range), ascii_buffer);
 			for (uint8_t i = 0; ascii_buffer[i] != NULL_TERMINATOR && i < 4; ++i) {
-				sd_card_buffer->buffer[sd_card_buffer->index++] = ascii_buffer[i];
+				sd_card_file->buffer[sd_card_file->index++] = ascii_buffer[i];
 			}
 		}
-		sd_card_buffer->buffer[sd_card_buffer->index++] = ' ';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = 'd';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = 'p';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = 's';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = ' ';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = '(';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = '+';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = '/';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = '-';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = '3';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = '2';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = '7';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = '6';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = '8';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = ')';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = NEW_LINE;
+		sd_card_file->buffer[sd_card_file->index++] = ' ';
+		sd_card_file->buffer[sd_card_file->index++] = 'd';
+		sd_card_file->buffer[sd_card_file->index++] = 'p';
+		sd_card_file->buffer[sd_card_file->index++] = 's';
+		sd_card_file->buffer[sd_card_file->index++] = ' ';
+		sd_card_file->buffer[sd_card_file->index++] = '(';
+		sd_card_file->buffer[sd_card_file->index++] = '+';
+		sd_card_file->buffer[sd_card_file->index++] = '/';
+		sd_card_file->buffer[sd_card_file->index++] = '-';
+		sd_card_file->buffer[sd_card_file->index++] = '3';
+		sd_card_file->buffer[sd_card_file->index++] = '2';
+		sd_card_file->buffer[sd_card_file->index++] = '7';
+		sd_card_file->buffer[sd_card_file->index++] = '6';
+		sd_card_file->buffer[sd_card_file->index++] = '8';
+		sd_card_file->buffer[sd_card_file->index++] = ')';
+		sd_card_file->buffer[sd_card_file->index++] = NEW_LINE;
 	}
 	/* delta-time units */
-	sd_card_buffer->buffer[sd_card_buffer->index++] = 'd';
-	sd_card_buffer->buffer[sd_card_buffer->index++] = 't';
-	sd_card_buffer->buffer[sd_card_buffer->index++] = ' ';
-	sd_card_buffer->buffer[sd_card_buffer->index++] = 'u';
-	sd_card_buffer->buffer[sd_card_buffer->index++] = 'n';
-	sd_card_buffer->buffer[sd_card_buffer->index++] = 'i';
-	sd_card_buffer->buffer[sd_card_buffer->index++] = 't';
-	sd_card_buffer->buffer[sd_card_buffer->index++] = 's';
-	sd_card_buffer->buffer[sd_card_buffer->index++] = ':';
-	sd_card_buffer->buffer[sd_card_buffer->index++] = ' ';
-	sd_card_buffer->buffer[sd_card_buffer->index++] = '8';
-	sd_card_buffer->buffer[sd_card_buffer->index++] = '3';
-	sd_card_buffer->buffer[sd_card_buffer->index++] = '.';
-	sd_card_buffer->buffer[sd_card_buffer->index++] = '3';
-	sd_card_buffer->buffer[sd_card_buffer->index++] = '3';
-	sd_card_buffer->buffer[sd_card_buffer->index++] = ' ';
-	sd_card_buffer->buffer[sd_card_buffer->index++] = 'n';
-	sd_card_buffer->buffer[sd_card_buffer->index++] = 's';
-	sd_card_buffer->buffer[sd_card_buffer->index++] = NEW_LINE;
+	sd_card_file->buffer[sd_card_file->index++] = 'd';
+	sd_card_file->buffer[sd_card_file->index++] = 't';
+	sd_card_file->buffer[sd_card_file->index++] = ' ';
+	sd_card_file->buffer[sd_card_file->index++] = 'u';
+	sd_card_file->buffer[sd_card_file->index++] = 'n';
+	sd_card_file->buffer[sd_card_file->index++] = 'i';
+	sd_card_file->buffer[sd_card_file->index++] = 't';
+	sd_card_file->buffer[sd_card_file->index++] = 's';
+	sd_card_file->buffer[sd_card_file->index++] = ':';
+	sd_card_file->buffer[sd_card_file->index++] = ' ';
+	sd_card_file->buffer[sd_card_file->index++] = '8';
+	sd_card_file->buffer[sd_card_file->index++] = '3';
+	sd_card_file->buffer[sd_card_file->index++] = '.';
+	sd_card_file->buffer[sd_card_file->index++] = '3';
+	sd_card_file->buffer[sd_card_file->index++] = '3';
+	sd_card_file->buffer[sd_card_file->index++] = ' ';
+	sd_card_file->buffer[sd_card_file->index++] = 'n';
+	sd_card_file->buffer[sd_card_file->index++] = 's';
+	sd_card_file->buffer[sd_card_file->index++] = NEW_LINE;
+//	feed_watchdog();
 	/* Column titles */
-	sd_card_buffer->buffer[sd_card_buffer->index++] = 'd';
-	sd_card_buffer->buffer[sd_card_buffer->index++] = 't';
+	sd_card_file->buffer[sd_card_file->index++] = 'd';
+	sd_card_file->buffer[sd_card_file->index++] = 't';
 	if (accelerometer.is_enabled) {
-		sd_card_buffer->buffer[sd_card_buffer->index++] = ',';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = 'a';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = 'c';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = 'c';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = 'e';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = 'l';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = '(';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = 'x';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = ',';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = 'y';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = ',';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = 'z';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = ')';
+		sd_card_file->buffer[sd_card_file->index++] = ',';
+		sd_card_file->buffer[sd_card_file->index++] = 'a';
+		sd_card_file->buffer[sd_card_file->index++] = 'c';
+		sd_card_file->buffer[sd_card_file->index++] = 'c';
+		sd_card_file->buffer[sd_card_file->index++] = 'e';
+		sd_card_file->buffer[sd_card_file->index++] = 'l';
+		sd_card_file->buffer[sd_card_file->index++] = '(';
+		sd_card_file->buffer[sd_card_file->index++] = 'x';
+		sd_card_file->buffer[sd_card_file->index++] = ',';
+		sd_card_file->buffer[sd_card_file->index++] = 'y';
+		sd_card_file->buffer[sd_card_file->index++] = ',';
+		sd_card_file->buffer[sd_card_file->index++] = 'z';
+		sd_card_file->buffer[sd_card_file->index++] = ')';
 	}
 	if (gyroscope.is_enabled) {
-		sd_card_buffer->buffer[sd_card_buffer->index++] = ',';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = 'g';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = 'y';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = 'r';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = 'o';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = '(';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = 'x';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = ',';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = 'y';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = ',';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = 'z';
-		sd_card_buffer->buffer[sd_card_buffer->index++] = ')';
+		sd_card_file->buffer[sd_card_file->index++] = ',';
+		sd_card_file->buffer[sd_card_file->index++] = 'g';
+		sd_card_file->buffer[sd_card_file->index++] = 'y';
+		sd_card_file->buffer[sd_card_file->index++] = 'r';
+		sd_card_file->buffer[sd_card_file->index++] = 'o';
+		sd_card_file->buffer[sd_card_file->index++] = '(';
+		sd_card_file->buffer[sd_card_file->index++] = 'x';
+		sd_card_file->buffer[sd_card_file->index++] = ',';
+		sd_card_file->buffer[sd_card_file->index++] = 'y';
+		sd_card_file->buffer[sd_card_file->index++] = ',';
+		sd_card_file->buffer[sd_card_file->index++] = 'z';
+		sd_card_file->buffer[sd_card_file->index++] = ')';
 	}
 }
 
-void add_firmware_info_to_sd_card_file(struct SdCardBuffer *const sd_card_buffer) {
+void add_firmware_info_to_sd_card_file(struct SdCardFile *const sd_card_file) {
 	uint8_t name[] = FIRMWARE_NAME;
 	uint8_t version[] = FIRMWARE_VERSION;
 	/* Add firmware name */
 	for (uint8_t i = 0; name[i] != NULL_TERMINATOR; ++i) {
-		sd_card_buffer->buffer[sd_card_buffer->index++] = name[i];
+		sd_card_file->buffer[sd_card_file->index++] = name[i];
 	}
-	sd_card_buffer->buffer[sd_card_buffer->index++] = ' ';
+	sd_card_file->buffer[sd_card_file->index++] = ' ';
 	/* Add firmware version */
-	sd_card_buffer->buffer[sd_card_buffer->index++] = 'v';
+	sd_card_file->buffer[sd_card_file->index++] = 'v';
 	for (uint8_t i = 0; version[i] != NULL_TERMINATOR; ++i) {
-		sd_card_buffer->buffer[sd_card_buffer->index++] = version[i];
+		sd_card_file->buffer[sd_card_file->index++] = version[i];
 	}
 }
 
-uint32_t get_block_offset(const struct SdCardBuffer *const sd_card_buffer) {
-	uint32_t block_offset = sd_card_buffer->block_num;
+uint32_t get_block_offset(const struct SdCardFile *const sd_card_file) {
+	uint32_t block_offset = sd_card_file->block_num;
 	block_offset *= BLKSIZE;
-	block_offset += get_cluster_offset(sd_card_buffer->cluster, &fatinfo);
+	block_offset += get_cluster_offset(sd_card_file->cluster, &fatinfo);
 	return block_offset;
 }
 
-bool add_value_to_buffer(struct SdCardBuffer *const sd_card_buffer, uint8_t value) {
-	sd_card_buffer->buffer[sd_card_buffer->index++] = value;
-	if (!write_full_buffer_to_sd_card(sd_card_buffer)) {
+bool add_value_to_buffer(struct SdCardFile *const sd_card_file, uint8_t value) {
+	sd_card_file->buffer[sd_card_file->index++] = value;
+	if (!write_full_buffer_to_sd_card(sd_card_file)) {
 		return false;
 	}
 	return true;
 }
 
-bool write_full_buffer_to_sd_card(struct SdCardBuffer *const sd_card_buffer) {
-	if (sd_card_buffer->index > SD_SAMPLE_BUFF_SIZE) {
+bool write_full_buffer_to_sd_card(struct SdCardFile *const sd_card_file) {
+	if (sd_card_file->index > SD_SAMPLE_BUFF_SIZE) {
 		/* Something went very wrong... */
 #ifdef DEBUG
 		HANG();
@@ -1117,11 +1014,11 @@ bool write_full_buffer_to_sd_card(struct SdCardBuffer *const sd_card_buffer) {
 		return false;
 	}
 	/* Buffer is full so write it to the SD card */
-	if (sd_card_buffer->index == SD_SAMPLE_BUFF_SIZE) {
+	if (sd_card_file->index == SD_SAMPLE_BUFF_SIZE) {
 		/* Write entire buffer to SD card */
-		uint32_t block_offset = get_block_offset(sd_card_buffer);
+		uint32_t block_offset = get_block_offset(sd_card_file);
 		uint8_t blocks = (uint16_t)SD_SAMPLE_BUFF_SIZE / BLKSIZE;
-		if (write_multiple_block(sd_card_buffer->buffer, block_offset, blocks) != SD_SUCCESS) {
+		if (write_multiple_block(sd_card_file->buffer, block_offset, blocks) != SD_SUCCESS) {
 			/* Couldn't write blocks */
 #ifdef DEBUG
 			HANG();
@@ -1129,14 +1026,14 @@ bool write_full_buffer_to_sd_card(struct SdCardBuffer *const sd_card_buffer) {
 			return false;
 		}
 		/* Prepare for writing next block */
-		sd_card_buffer->size += SD_SAMPLE_BUFF_SIZE;
-		sd_card_buffer->index = 0;
-		sd_card_buffer->block_num += blocks;
+		sd_card_file->size += SD_SAMPLE_BUFF_SIZE;
+		sd_card_file->index = 0;
+		sd_card_file->block_num += blocks;
 		
 		/* Cluster is full */
-		if (!valid_block(sd_card_buffer->block_num, &fatinfo)) {
+		if (!valid_block(sd_card_file->block_num, &fatinfo)) {
 			/* Find another cluster */
-			uint16_t next_cluster = find_cluster(sd_card_buffer->buffer, &fatinfo);
+			uint16_t next_cluster = find_cluster(sd_card_file->buffer, &fatinfo);
 			if (!next_cluster) {
 				/* Couldn't find another cluster; SD card is full */
 #ifdef DEBUG
@@ -1145,22 +1042,22 @@ bool write_full_buffer_to_sd_card(struct SdCardBuffer *const sd_card_buffer) {
 				return false;
 			}
 			/* Update the FAT */
-			if (update_fat(sd_card_buffer->buffer, &fatinfo, sd_card_buffer->cluster * 2, next_cluster)) {
+			if (update_fat(sd_card_file->buffer, &fatinfo, sd_card_file->cluster * 2, next_cluster)) {
 				/* Couldn't update FAT */
 #ifdef DEBUG
 				HANG();
 #endif
 				return false;
 			}
-			sd_card_buffer->cluster = next_cluster;
-			sd_card_buffer->block_num = 0;
+			sd_card_file->cluster = next_cluster;
+			sd_card_file->block_num = 0;
 		}
 	}
 	return true;
 }
 
-bool write_remaining_buffer_to_sd_card(struct SdCardBuffer *const sd_card_buffer) {
-	if (sd_card_buffer->index > SD_SAMPLE_BUFF_SIZE) {
+bool write_remaining_buffer_to_sd_card(struct SdCardFile *const sd_card_file) {
+	if (sd_card_file->index > SD_SAMPLE_BUFF_SIZE) {
 		/* Something went very wrong... */
 #ifdef DEBUG
 		HANG();
@@ -1168,14 +1065,14 @@ bool write_remaining_buffer_to_sd_card(struct SdCardBuffer *const sd_card_buffer
 		return false;
 	}
 	/* Write the remaining buffer data to SD card */
-	if (sd_card_buffer->index > BLKSIZE) {
+	if (sd_card_file->index > BLKSIZE) {
 		/*
 		 * Do a multi block write followed by a single block write if not all
 		 * bytes were written: remaining bytes were not a multiple of BLKSIZE
 		 */
-		uint32_t block_offset = get_block_offset(sd_card_buffer);
-		uint8_t blocks = sd_card_buffer->index / BLKSIZE;
-		if (write_multiple_block(sd_card_buffer->buffer, block_offset, blocks) != SD_SUCCESS) {
+		uint32_t block_offset = get_block_offset(sd_card_file);
+		uint8_t blocks = sd_card_file->index / BLKSIZE;
+		if (write_multiple_block(sd_card_file->buffer, block_offset, blocks) != SD_SUCCESS) {
 			/* Couldn't write blocks */
 #ifdef DEBUG
 			HANG();
@@ -1183,37 +1080,37 @@ bool write_remaining_buffer_to_sd_card(struct SdCardBuffer *const sd_card_buffer
 			return false;
 		}
 		uint16_t bytes_written = blocks * BLKSIZE;
-		sd_card_buffer->size += bytes_written;
-		sd_card_buffer->index = sd_card_buffer->index - bytes_written;
-		sd_card_buffer->block_num += blocks;
+		sd_card_file->size += bytes_written;
+		sd_card_file->index = sd_card_file->index - bytes_written;
+		sd_card_file->block_num += blocks;
 		
 		/* Now write the single block */
-		if (sd_card_buffer->index > 0) {
+		if (sd_card_file->index > 0) {
 			/* Place bytes at beginning of buffer */
-			for (uint16_t i = 0; i < sd_card_buffer->index; ++i) {
-				sd_card_buffer->buffer[i] = sd_card_buffer->buffer[bytes_written + i];
+			for (uint16_t i = 0; i < sd_card_file->index; ++i) {
+				sd_card_file->buffer[i] = sd_card_file->buffer[bytes_written + i];
 			}
 			/* Write the block */
-			block_offset = get_block_offset(sd_card_buffer);
-			if (write_block(sd_card_buffer->buffer, block_offset, sd_card_buffer->index) != SD_SUCCESS) {
+			block_offset = get_block_offset(sd_card_file);
+			if (write_block(sd_card_file->buffer, block_offset, sd_card_file->index) != SD_SUCCESS) {
 	#ifdef DEBUG
 				HANG();
 	#endif
 				return false;
 			}
-			sd_card_buffer->size += sd_card_buffer->index;
+			sd_card_file->size += sd_card_file->index;
 		}
 	} else {
 		/* Write the single block */
-		uint32_t block_offset = get_block_offset(sd_card_buffer);
-		if (write_block(sd_card_buffer->buffer, block_offset, sd_card_buffer->index) != SD_SUCCESS) {
+		uint32_t block_offset = get_block_offset(sd_card_file);
+		if (write_block(sd_card_file->buffer, block_offset, sd_card_file->index) != SD_SUCCESS) {
 			/* Couldn't write block */
 #ifdef DEBUG
 			HANG();
 #endif
 			return false;
 		}
-		sd_card_buffer->size += sd_card_buffer->index;
+		sd_card_file->size += sd_card_file->index;
 	}
 	return true;
 }
@@ -1292,6 +1189,10 @@ void get_config_settings(void) {
  */
 #pragma vector = TIMER0_A0_VECTOR
 __interrupt void CCR0_ISR(void) {
+	timer_interrupt_event();
+}
+
+void timer_interrupt_event(void) {
 	/* Increment high byte of timer */
 	++time_cont;
 	/* Clear timer interrupt flag */
@@ -1307,20 +1208,19 @@ __interrupt void CCR0_ISR(void) {
 #pragma vector = PORT1_VECTOR
 __interrupt void PORT1_ISR(void) {
 	if (button_interrupt_triggered()) {
+		bool success = button_press_event_handled();
 		/* Clear the flag */
 		clear_int_ctrl();
-		if (button_press_event_handled()) {
+		if (success) {
 			/* Wake up from low power mode; does nothing if not in low power mode */
 			LPM3_EXIT;
 			return;
 		}
 	}
 	if (accel_int()) {
-		//clear_int_accel(); // TODO unnecessary?
-		if (!sample_event_handled()) {
-			/* Trigger interrupt to try again to capture current sample */
-			set_int_accel();
-		}
+		/* Accelerometer interrupt flag is cleared when axes are read */
+		/* Keep trying to handle the event until successful */
+		while (!sample_event_handled());
 	}
 }
 
@@ -1365,10 +1265,13 @@ bool sample_event_handled(void) {
 	timestamp += TA0R;
 	/* Let the timer interrupt run first and then capture sample */
 	if (timer_interrupt_triggered()) {
+#ifdef DEBUG
 		debug_hit = true;
+#endif
+		/* Run the timer interrupt event */
+		timer_interrupt_event();
 		return false;
 	}
-	debug_hit = false;
 	/* Calculate the delta timestamp for sample data using previous sample's timestamp */
 	uint32_t delta_time;
 	if (timestamp_accel <= timestamp) {
@@ -1380,21 +1283,13 @@ bool sample_event_handled(void) {
 	uint8_t delta_time_h = delta_time >> 16;
 	uint8_t delta_time_m = delta_time >> 8;
 	uint8_t delta_time_l = delta_time;
-	/* Get accelerometer sample data */
-	uint8_t accel_x_axis_h = 0;
-	uint8_t accel_x_axis_l = 0;
-	uint8_t accel_y_axis_h = 0;
-	uint8_t accel_y_axis_l = 0;
-	uint8_t accel_z_axis_h = 0;
-	uint8_t accel_z_axis_l = 0;
-	{
-		accel_x_axis_h = read_addr_accel(ACCEL_OUTX_H);
-		accel_x_axis_l = read_addr_accel(ACCEL_OUTX_L);
-		accel_y_axis_h = read_addr_accel(ACCEL_OUTY_H);
-		accel_y_axis_l = read_addr_accel(ACCEL_OUTY_L);
-		accel_z_axis_h = read_addr_accel(ACCEL_OUTZ_H);
-		accel_z_axis_l = read_addr_accel(ACCEL_OUTZ_L);
-	}
+	/* Get accelerometer sample data (which also clears the accel interrupt flag) */
+	uint8_t accel_x_axis_h = read_addr_accel(ACCEL_OUTX_H);
+	uint8_t accel_x_axis_l = read_addr_accel(ACCEL_OUTX_L);
+	uint8_t accel_y_axis_h = read_addr_accel(ACCEL_OUTY_H);
+	uint8_t accel_y_axis_l = read_addr_accel(ACCEL_OUTY_L);
+	uint8_t accel_z_axis_h = read_addr_accel(ACCEL_OUTZ_H);
+	uint8_t accel_z_axis_l = read_addr_accel(ACCEL_OUTZ_L);
 	/* Get gyroscope sample data */
 	uint8_t gyro_x_axis_h = 0;
 	uint8_t gyro_x_axis_l = 0;
@@ -1414,15 +1309,14 @@ bool sample_event_handled(void) {
 	bool success = add_sample(&sample_buffer, delta_time_h, delta_time_m, delta_time_l,
 										accel_x_axis_h, accel_x_axis_l, accel_y_axis_h, accel_y_axis_l, accel_z_axis_h, accel_z_axis_l,
 										gyro_x_axis_h, gyro_x_axis_l, gyro_y_axis_h, gyro_y_axis_l, gyro_z_axis_h, gyro_z_axis_l);
-	if (!success) {
-		/* The buffer is full */
+	if (success) {
+		/* Update timestamp only if sample was successfully added to buffer */
+		timestamp_accel = timestamp;
+	} else {
 #ifdef DEBUG
 		++debug_int;
 #endif
-		return true;
 	}
-	/* Update timestamp only if sample was successfully added to buffer */
-	timestamp_accel = timestamp;
 	return true;
 }
 

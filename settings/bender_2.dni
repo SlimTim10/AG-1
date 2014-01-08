@@ -24,10 +24,10 @@ Control Register=0
 NextState0=0
 NextState1=0
 [Action Register]
-Break=1
+Break=7
 State Storage=0
 [DebugChecksum]
-Checksum=2124049967
+Checksum=-1537561035
 [DisAssemblyWindow]
 NumStates=_ 1
 State 1=_ 1
@@ -46,16 +46,24 @@ TriggerName=main
 LimitSize=0
 ByteLimit=50
 [Breakpoints]
-Bp0=_ "STD_CODE" "{$PROJ_DIR$\main.c}.1254.3@1" 0 0 0 0 "" 0 ""
-Bp1=_ "STD_CODE" "{$PROJ_DIR$\main.c}.1454.10@1" 0 0 0 0 "" 0 ""
-Bp2=_ "STD_CODE" "{$PROJ_DIR$\main.c}.1442.3@1" 0 0 0 0 "" 0 ""
-Bp3=_ "STD_CODE" "{$PROJ_DIR$\sdfat.c}.316.3@1" 0 0 0 0 "" 0 ""
-Bp4=_ "STD_CODE" "{$PROJ_DIR$\sdfat.c}.322.3@1" 0 0 0 0 "" 0 ""
-Bp5=_ "STD_CODE" "{$PROJ_DIR$\main.c}.1137.8@1" 0 0 0 0 "" 0 ""
-Bp6=_ "STD_CODE" "{$PROJ_DIR$\main.c}.1137.3@1" 0 0 0 0 "" 0 ""
-Bp7=_ "STD_CODE" "{$PROJ_DIR$\sdfat.c}.879.10@1" 0 0 0 0 "" 0 ""
-Bp8=_ "STD_CODE" "{$PROJ_DIR$\main.c}.1329.2@1" 0 0 0 0 "" 0 ""
-Count=9
+Bp0=_ "STD_CODE" "{$PROJ_DIR$\main.c}.1153.1@1" 0 0 0 0 "" 0 ""
+Bp1=_ "STD_CODE" "{$PROJ_DIR$\main.c}.1352.4@1" 0 0 0 0 "" 0 ""
+Bp2=_ "STD_CODE" "{$PROJ_DIR$\main.c}.1343.2@1" 0 0 0 0 "" 0 ""
+Bp3=_ "STD_CODE" "{$PROJ_DIR$\sdfat.c}.314.2@1" 0 0 0 0 "" 0 ""
+Bp4=_ "STD_CODE" "{$PROJ_DIR$\sdfat.c}.320.2@1" 0 0 0 0 "" 0 ""
+Bp5=_ "STD_CODE" "{$PROJ_DIR$\main.c}.1045.4@1" 0 0 0 0 "" 0 ""
+Bp6=_ "STD_CODE" "{$PROJ_DIR$\main.c}.1045.4@1" 0 0 0 0 "" 0 ""
+Bp7=_ "STD_CODE" "{$PROJ_DIR$\sdfat.c}.878.10@1" 0 0 0 0 "" 0 ""
+Bp8=_ "STD_CODE" "{$PROJ_DIR$\main.c}.1229.2@1" 0 0 0 0 "" 0 ""
+Bp9=_ "STD_CODE" "{$PROJ_DIR$\msp430f5310_extra.c}.130.2@1" 0 0 0 0 "" 0 ""
+Bp10=_ "STD_CODE" "{$PROJ_DIR$\circuit.c}.62.2@1" 0 0 0 0 "" 0 ""
+Bp11=_ "STD_CODE" "{$PROJ_DIR$\main.c}.487.3@1" 0 0 0 0 "" 0 ""
+Bp12=_ "STD_CODE" "{$PROJ_DIR$\main.c}.1223.11@1" 0 0 0 0 "" 0 ""
+Bp13=_ "STD_CODE" "{$PROJ_DIR$\main.c}.579.10@1" 0 0 0 0 "" 0 ""
+Bp14=_ "STD_CODE" "{$PROJ_DIR$\main.c}.1003.3@1" 0 0 0 0 "" 0 ""
+Bp15=_ "STD_CODE" "{$PROJ_DIR$\main.c}.737.13@1" 0 0 0 0 "" 0 ""
+Bp16=_ "STD_CODE" "{$PROJ_DIR$\buttonbuffer.c}.26.2@1" 0 0 0 0 "" 0 ""
+Count=17
 [FET]
 Clock mode=14
 Extended Clock mode=-1
@@ -90,6 +98,6 @@ SuppressDialog=0
 Enabled=0
 [DriverProfiling]
 Enabled=0
-Mode=737673728
+Mode=318331272
 Graph=0
 Symbiont=0

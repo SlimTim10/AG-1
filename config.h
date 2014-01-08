@@ -2,8 +2,8 @@
  * Written by Tim Johns.
  */
 
-#ifndef _UTILLIB_H
-#define _UTILLIB_H
+#ifndef _CONFIGLIB_H
+#define _CONFIGLIB_H
 
 /*
  * Determines the key to look for in parsing the config file and the appropriate means
