@@ -24,11 +24,11 @@ struct Sample {
 
 /* Circular buffer that holds the samples */
 struct SampleBuffer {
-	struct Sample *samples;
+	volatile struct Sample *samples;
 	uint16_t size;
 	uint16_t start;
 	uint16_t end;
-	uint16_t count;
+	volatile uint16_t count;
 };
 
 /* 
@@ -40,7 +40,7 @@ struct SampleBuffer {
  *
  * size: the number of samples to be inserted.
  */
-void construct_sample_buffer(struct SampleBuffer *sample_buffer, struct Sample *samples, uint16_t size);
+void construct_sample_buffer(struct SampleBuffer *sample_buffer, volatile struct Sample *samples, uint16_t size);
 
 /* 
  * Set all samples in the buffer to default values.

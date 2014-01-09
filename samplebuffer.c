@@ -9,9 +9,9 @@
  *
  * sample: The sample to be cleared
  */
-void clear_sample(struct Sample *sample);
+void clear_sample(volatile struct Sample *sample);
 
-void construct_sample_buffer(struct SampleBuffer *sample_buffer, struct Sample *samples, uint16_t size) {
+void construct_sample_buffer(struct SampleBuffer *sample_buffer, volatile struct Sample *samples, uint16_t size) {
 	sample_buffer->samples = samples;
 	sample_buffer->size = size;
 	sample_buffer->start = 0;
@@ -21,7 +21,7 @@ void construct_sample_buffer(struct SampleBuffer *sample_buffer, struct Sample *
 
 void clear_sample_buffer(struct SampleBuffer *sample_buffer) {
 	for (uint16_t i = 0; i < sample_buffer->size; ++i) {
-		struct Sample *sample = &sample_buffer->samples[i];
+		volatile struct Sample *sample = &sample_buffer->samples[i];
 		clear_sample(sample);
 	}
 	sample_buffer->start = 0;
@@ -37,7 +37,7 @@ bool add_sample(struct SampleBuffer *sample_buffer, uint8_t delta_time_h, uint8_
 		return false;
 	}
 	/* Set data for new sample based on parameters */
-	struct Sample *sample = &sample_buffer->samples[sample_buffer->end];
+	volatile struct Sample *sample = &sample_buffer->samples[sample_buffer->end];
 	/* Delta time */
 	sample->delta_time[0] = delta_time_h;
 	sample->delta_time[1] = delta_time_m;
@@ -71,7 +71,7 @@ bool remove_sample(struct SampleBuffer *sample_buffer, struct Sample *sample_ret
 	 * Store the sample in a new variable so the data won't be overwritten by a new sample when read 
 	 * instead of returning the existing sample in the buffer
 	 */
-	struct Sample *sample = &sample_buffer->samples[sample_buffer->start];
+	volatile struct Sample *sample = &sample_buffer->samples[sample_buffer->start];
 	/* Delta time */
 	sample_ret->delta_time[0] = sample->delta_time[0];
 	sample_ret->delta_time[1] = sample->delta_time[1];
@@ -96,7 +96,7 @@ bool remove_sample(struct SampleBuffer *sample_buffer, struct Sample *sample_ret
 	return true;
 }
 
-void clear_sample(struct Sample *sample) {
+void clear_sample(volatile struct Sample *sample) {
 	/* Delta time */
 	sample->delta_time[0] = 0;
 	sample->delta_time[1] = 0;

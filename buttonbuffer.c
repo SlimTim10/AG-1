@@ -4,7 +4,7 @@
 
 #include "buttonbuffer.h"
 
-void construct_button_press_buffer(struct ButtonPressBuffer *button_press_buffer, enum ButtonPress *button_presses, uint16_t size) {
+void construct_button_press_buffer(struct ButtonPressBuffer *button_press_buffer, volatile enum ButtonPress *button_presses, uint16_t size) {
 	button_press_buffer->button_presses = button_presses;
 	button_press_buffer->size = size;
 	button_press_buffer->start = 0;

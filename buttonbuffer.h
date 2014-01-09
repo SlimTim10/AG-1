@@ -18,11 +18,11 @@ enum ButtonPress {
 
 /* Circular buffer that holds button press data */
 struct ButtonPressBuffer {
-	enum ButtonPress *button_presses;
+	volatile enum ButtonPress *button_presses;
 	uint16_t size;
 	uint16_t start;
 	uint16_t end;
-	uint16_t count;
+	volatile uint16_t count;
 };
 
 /* 
@@ -30,7 +30,7 @@ struct ButtonPressBuffer {
  * 
  * PARAMS
  */
-void construct_button_press_buffer(struct ButtonPressBuffer *button_press_buffer, enum ButtonPress *button_presses, uint16_t size);
+void construct_button_press_buffer(struct ButtonPressBuffer *button_press_buffer, volatile enum ButtonPress *button_presses, uint16_t size);
 
 /* 
  * DESC

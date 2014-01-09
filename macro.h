@@ -17,7 +17,7 @@
 
 /* Update for new firmware versions */
 #define FIRMWARE_NAME			"AG-1"
-#define FIRMWARE_VERSION		"20131225"
+#define FIRMWARE_VERSION		"20140110"
 
 /* Name of log files (max. 5 chars) */
 #define FILE_NAME	"DATA"

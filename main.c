@@ -38,8 +38,8 @@
  * Define global debugging variables
  */
 #ifdef DEBUG
-bool debug_hit = false;
-uint32_t debug_int = 0;
+static volatile bool debug_hit = false;
+static volatile uint32_t debug_int = 0;
 #endif
 
 /* Possible states of the device */
@@ -85,7 +85,7 @@ void power_off_accelerometer(void);
 void power_on_gyroscope(void);
 void power_off_gyroscope(void);
 void enable_button_pressing(bool enable_button_tap_flash, bool enable_triple_tap);
-void enable_accelerometer_sampling(void);
+/* Note: perform an empty read before so we can clear P1.5 */
 void accelerometer_empty_read(void);
 bool voltage_is_low(void);
 /* Flash LED multiple times quickly to show "panic" */
@@ -133,7 +133,7 @@ enum ButtonPress get_button_press(bool can_triple_tap);
 enum ButtonPress wait_for_button_release(void);
 
 /* High byte for continuous timer */
-uint8_t time_cont;
+volatile uint8_t time_cont;
 
 /* Time of last sample for getting delta timestamp for acceleration data for new sample */
 uint32_t timestamp_accel;
@@ -142,13 +142,13 @@ uint32_t timestamp_accel;
 struct SampleBuffer sample_buffer;
 
 /* Samples for buffer */
-struct Sample samples[RAW_SAMPLE_BUFF_SIZE];
+volatile struct Sample samples[RAW_SAMPLE_BUFF_SIZE];
 
 /* Buffer for button presses */
 struct ButtonPressBuffer button_press_buffer;
 
 /* Button presses for buffer of button presses */
-enum ButtonPress button_presses[BUTTON_BUFF_SIZE];
+volatile enum ButtonPress button_presses[BUTTON_BUFF_SIZE];
 
 /* Whether the user can triple tap */
 bool triple_tap_enabled;
@@ -254,12 +254,6 @@ void enable_button_pressing(bool enable_button_tap_flash, bool enable_triple_tap
 	activate_ctrl_interrupt();
 }
 
-void enable_accelerometer_sampling(void) {
-	activate_accel_interrupt();
-	set_int_accel();
-}
-
-// TODO possibly use set_int_accel() / clear_int_accel() instead?
 void accelerometer_empty_read(void) {
 	read_addr_accel(ACCEL_OUTX_H);
 	read_addr_accel(ACCEL_OUTX_L);
@@ -446,7 +440,7 @@ enum DeviceState start_logging(void) {
 	/* Accelerometer is always turned on since we use its interrupt to grab samples */
 	{
 		power_on_accelerometer();
-		enable_accelerometer_sampling();
+		activate_accel_interrupt();
 	}
 	feed_watchdog();
 	if (gyroscope.is_enabled) {
@@ -468,6 +462,8 @@ enum DeviceState start_logging(void) {
 	feed_watchdog();
 	/* Start capturing samples */
 	enable_interrupts();
+	/* Read accelerometer axes to get interrupt started */
+	accelerometer_empty_read();
 	return LOG_STATE;
 }
 
@@ -1209,24 +1205,25 @@ void timer_interrupt_event(void) {
 __interrupt void PORT1_ISR(void) {
 	if (button_interrupt_triggered()) {
 		bool success = button_press_event_handled();
-		/* Clear the flag */
-		clear_int_ctrl();
+		/* Deactivate interrupts to prevent additional button presses and end sampling */
+		deactivate_interrupts();
 		if (success) {
 			/* Wake up from low power mode; does nothing if not in low power mode */
 			LPM3_EXIT;
-			return;
 		}
+		/* Clear the button interrupt flag */
+		clear_int_ctrl();
 	}
 	if (accel_int()) {
 		/* Accelerometer interrupt flag is cleared when axes are read */
 		/* Keep trying to handle the event until successful */
 		while (!sample_event_handled());
+		/* Clear the accelerometer interrupt flag */
+		clear_int_accel();
 	}
 }
 
 bool button_press_event_handled(void) {
-	/* Deactivate interrupts to prevent additional button presses and end sampling */
-	deactivate_interrupts();
 	/* Get button press */
 	enum ButtonPress button_press = get_button_press(triple_tap_enabled);
 	/* Put the button press data in the buffer */
@@ -1265,9 +1262,9 @@ bool sample_event_handled(void) {
 	timestamp += TA0R;
 	/* Let the timer interrupt run first and then capture sample */
 	if (timer_interrupt_triggered()) {
-#ifdef DEBUG
-		debug_hit = true;
-#endif
+//#ifdef DEBUG
+//		debug_hit = true;
+//#endif
 		/* Run the timer interrupt event */
 		timer_interrupt_event();
 		return false;
@@ -1313,9 +1310,9 @@ bool sample_event_handled(void) {
 		/* Update timestamp only if sample was successfully added to buffer */
 		timestamp_accel = timestamp;
 	} else {
-#ifdef DEBUG
-		++debug_int;
-#endif
+//#ifdef DEBUG
+//		++debug_int;
+//#endif
 	}
 	return true;
 }

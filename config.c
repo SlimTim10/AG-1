@@ -199,7 +199,7 @@ void get_user_config(uint8_t *data, struct fatstruct *info) {
 				&& data[j + 10] == 'I') {
 				/* config.ini entry found. Store starting cluster */
 				config_file_offset = info->fileclustoffset + 
-										(((uint8_t)(data[j + 27] << 8) +
+										((((uint16_t)data[j + 27] << 8) +
 										(uint8_t)data[j + 26] - 2) *
 										info->nbytesinclust);
 				break;
@@ -237,6 +237,7 @@ void get_config_values(uint8_t *data, uint32_t block_offset) {
 	 * to EOL.
 	 */
 	uint16_t i = 0;
+	uint16_t file_size = 0;
 	Bool stop = FALSE;
 	while (stop == FALSE) {
 		/* End of the block is reached so fetch the next block */
@@ -246,6 +247,7 @@ void get_config_values(uint8_t *data, uint32_t block_offset) {
 			/* Read the next block into data[] */
 			read_block(data, block_offset, SD_LONG_TIMEOUT);
 			/* Reset the counter */
+			file_size += i;
 			i = 0;
 		} else {
 
@@ -318,8 +320,9 @@ void get_config_values(uint8_t *data, uint32_t block_offset) {
 			}
 			
 			/* File exceeded the max file size */
-			if (i == MAX_FILE_SIZE - 1) {
+			if (file_size >= MAX_FILE_SIZE - 1) {
 				/* TODO PANIC! File is too big! */
+				stop = TRUE;
 			} else {
 				++i;
 			}

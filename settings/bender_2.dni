@@ -24,10 +24,10 @@ Control Register=0
 NextState0=0
 NextState1=0
 [Action Register]
-Break=7
+Break=1
 State Storage=0
 [DebugChecksum]
-Checksum=-1537561035
+Checksum=-1716252189
 [DisAssemblyWindow]
 NumStates=_ 1
 State 1=_ 1
@@ -46,23 +46,23 @@ TriggerName=main
 LimitSize=0
 ByteLimit=50
 [Breakpoints]
-Bp0=_ "STD_CODE" "{$PROJ_DIR$\main.c}.1153.1@1" 0 0 0 0 "" 0 ""
-Bp1=_ "STD_CODE" "{$PROJ_DIR$\main.c}.1352.4@1" 0 0 0 0 "" 0 ""
-Bp2=_ "STD_CODE" "{$PROJ_DIR$\main.c}.1343.2@1" 0 0 0 0 "" 0 ""
+Bp0=_ "STD_CODE" "{$PROJ_DIR$\main.c}.1151.1@1" 0 0 0 0 "" 0 ""
+Bp1=_ "STD_CODE" "{$PROJ_DIR$\main.c}.1359.41@1" 0 0 0 0 "" 0 ""
+Bp2=_ "STD_CODE" "{$PROJ_DIR$\main.c}.1344.3@1" 0 0 0 0 "" 0 ""
 Bp3=_ "STD_CODE" "{$PROJ_DIR$\sdfat.c}.314.2@1" 0 0 0 0 "" 0 ""
 Bp4=_ "STD_CODE" "{$PROJ_DIR$\sdfat.c}.320.2@1" 0 0 0 0 "" 0 ""
-Bp5=_ "STD_CODE" "{$PROJ_DIR$\main.c}.1045.4@1" 0 0 0 0 "" 0 ""
-Bp6=_ "STD_CODE" "{$PROJ_DIR$\main.c}.1045.4@1" 0 0 0 0 "" 0 ""
+Bp5=_ "STD_CODE" "{$PROJ_DIR$\main.c}.1043.4@1" 0 0 0 0 "" 0 ""
+Bp6=_ "STD_CODE" "{$PROJ_DIR$\main.c}.1043.4@1" 0 0 0 0 "" 0 ""
 Bp7=_ "STD_CODE" "{$PROJ_DIR$\sdfat.c}.878.10@1" 0 0 0 0 "" 0 ""
-Bp8=_ "STD_CODE" "{$PROJ_DIR$\main.c}.1229.2@1" 0 0 0 0 "" 0 ""
+Bp8=_ "STD_CODE" "{$PROJ_DIR$\main.c}.1231.19@1" 0 0 0 0 "" 0 ""
 Bp9=_ "STD_CODE" "{$PROJ_DIR$\msp430f5310_extra.c}.130.2@1" 0 0 0 0 "" 0 ""
 Bp10=_ "STD_CODE" "{$PROJ_DIR$\circuit.c}.62.2@1" 0 0 0 0 "" 0 ""
-Bp11=_ "STD_CODE" "{$PROJ_DIR$\main.c}.487.3@1" 0 0 0 0 "" 0 ""
-Bp12=_ "STD_CODE" "{$PROJ_DIR$\main.c}.1223.11@1" 0 0 0 0 "" 0 ""
-Bp13=_ "STD_CODE" "{$PROJ_DIR$\main.c}.579.10@1" 0 0 0 0 "" 0 ""
-Bp14=_ "STD_CODE" "{$PROJ_DIR$\main.c}.1003.3@1" 0 0 0 0 "" 0 ""
-Bp15=_ "STD_CODE" "{$PROJ_DIR$\main.c}.737.13@1" 0 0 0 0 "" 0 ""
-Bp16=_ "STD_CODE" "{$PROJ_DIR$\buttonbuffer.c}.26.2@1" 0 0 0 0 "" 0 ""
+Bp11=_ "STD_CODE" "{$PROJ_DIR$\main.c}.485.3@1" 0 0 0 0 "" 0 ""
+Bp12=_ "STD_CODE" "{$PROJ_DIR$\main.c}.577.10@1" 0 0 0 0 "" 0 ""
+Bp13=_ "STD_CODE" "{$PROJ_DIR$\main.c}.1001.3@1" 0 0 0 0 "" 0 ""
+Bp14=_ "STD_CODE" "{$PROJ_DIR$\main.c}.735.13@1" 0 0 0 0 "" 0 ""
+Bp15=_ "STD_CODE" "{$PROJ_DIR$\buttonbuffer.c}.26.2@1" 0 0 0 0 "" 0 ""
+Bp16=_ "STD_CODE" "{$PROJ_DIR$\config.c}.325.5@1" 1 0 0 0 "" 0 ""
 Count=17
 [FET]
 Clock mode=14
@@ -98,6 +98,6 @@ SuppressDialog=0
 Enabled=0
 [DriverProfiling]
 Enabled=0
-Mode=318331272
+Mode=-1249790591
 Graph=0
 Symbiont=0
