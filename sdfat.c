@@ -669,6 +669,14 @@ void delete_file(uint8_t dten, uint32_t curoffset, uint8_t *data, struct fatstru
 	write_block(data, curoffset, 512);
 }
 
+void fat_defaults(struct fatstruct *info) {
+	info->dtoffset = 245760;
+	info->dtsize = 16384;
+	info->fatoffset = 1024;
+	info->nfats = 2;
+	info->fatsize = 122368;
+}
+
 /*
  * Format the SD card to FAT16 (quick format)
  *

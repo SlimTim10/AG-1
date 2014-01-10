@@ -117,6 +117,9 @@ uint8_t update_dir_table(uint8_t *data, struct fatstruct *info, uint16_t cluster
 uint8_t valid_boot_sector(uint8_t *data, struct fatstruct *boot);
 uint8_t parse_boot_sector(uint8_t *data, struct fatstruct *info);
 void delete_file(uint8_t, uint32_t, uint8_t *data, struct fatstruct *info);
+
+/* For writing a good boot sector; taken from an SD card with a working boot sector */
+void fat_defaults(struct fatstruct *info);
 void format_sd(uint8_t *data, struct fatstruct *info, void (*pre_format)(), void (*during_format)(), void (*post_format)());
 
 /*

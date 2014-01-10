@@ -418,12 +418,12 @@ enum DeviceState start_logging(void) {
 	/* Turn on power to SD card and read the FAT boot sector */
 	power_on_sd();
 	feed_watchdog();
-	init_sd_fat();
-	feed_watchdog();
 	/* Check for low voltage */
 	if (voltage_is_low()) {
 		restart();
 	}
+	feed_watchdog();
+	init_sd_fat();
 	feed_watchdog();
 	/*  
 	 * We parse the config file each time we want to start logging so the user doesn't
@@ -786,13 +786,19 @@ void format_sd_card(void) {
 	/* Turn on power to SD card */
 	power_on_sd();
 	feed_watchdog();
-	init_sd_fat();
-	feed_watchdog();
 	/* Check for low voltage */
 	if (voltage_is_low()) {
 		restart();
 	}
 	feed_watchdog();
+	/* Try to read the boot sector so we can salvage the config file */
+	if (valid_boot_sector(data_sd, &fatinfo) == FAT_SUCCESS &&
+		parse_boot_sector(data_sd, &fatinfo) == FAT_SUCCESS) {
+	} else {
+		fat_defaults(&fatinfo);
+	}
+	/* Formatting takes a while so we need to stop the wdt */
+	stop_watchdog();
 	/* Format the SD card, using LED 1 to indicate it's being formatted */
 	format_sd(data_sd, &fatinfo, led_1_on, led_1_toggle, led_1_off);
 	restart();

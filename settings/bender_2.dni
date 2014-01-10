@@ -24,10 +24,10 @@ Control Register=0
 NextState0=0
 NextState1=0
 [Action Register]
-Break=1
+Break=0
 State Storage=0
 [DebugChecksum]
-Checksum=-254063434
+Checksum=-739903828
 [DisAssemblyWindow]
 NumStates=_ 1
 State 1=_ 1
@@ -46,24 +46,27 @@ TriggerName=main
 LimitSize=0
 ByteLimit=50
 [Breakpoints]
-Bp0=_ "STD_CODE" "{$PROJ_DIR$\main.c}.1149.1@1" 0 0 0 0 "" 0 ""
-Bp1=_ "STD_CODE" "{$PROJ_DIR$\main.c}.1356.41@1" 0 0 0 0 "" 0 ""
-Bp2=_ "STD_CODE" "{$PROJ_DIR$\main.c}.1341.3@1" 0 0 0 0 "" 0 ""
+Bp0=_ "STD_CODE" "{$PROJ_DIR$\main.c}.1155.1@1" 0 0 0 0 "" 0 ""
+Bp1=_ "STD_CODE" "{$PROJ_DIR$\main.c}.1362.41@1" 0 0 0 0 "" 0 ""
+Bp2=_ "STD_CODE" "{$PROJ_DIR$\main.c}.1347.3@1" 0 0 0 0 "" 0 ""
 Bp3=_ "STD_CODE" "{$PROJ_DIR$\sdfat.c}.314.2@1" 0 0 0 0 "" 0 ""
 Bp4=_ "STD_CODE" "{$PROJ_DIR$\sdfat.c}.320.2@1" 0 0 0 0 "" 0 ""
-Bp5=_ "STD_CODE" "{$PROJ_DIR$\main.c}.1041.4@1" 0 0 0 0 "" 0 ""
-Bp6=_ "STD_CODE" "{$PROJ_DIR$\main.c}.1041.4@1" 0 0 0 0 "" 0 ""
-Bp7=_ "STD_CODE" "{$PROJ_DIR$\sdfat.c}.878.10@1" 0 0 0 0 "" 0 ""
-Bp8=_ "STD_CODE" "{$PROJ_DIR$\main.c}.1228.19@1" 0 0 0 0 "" 0 ""
+Bp5=_ "STD_CODE" "{$PROJ_DIR$\main.c}.1047.4@1" 0 0 0 0 "" 0 ""
+Bp6=_ "STD_CODE" "{$PROJ_DIR$\main.c}.1047.4@1" 0 0 0 0 "" 0 ""
+Bp7=_ "STD_CODE" "{$PROJ_DIR$\sdfat.c}.886.10@1" 0 0 0 0 "" 0 ""
+Bp8=_ "STD_CODE" "{$PROJ_DIR$\main.c}.1234.19@1" 0 0 0 0 "" 0 ""
 Bp9=_ "STD_CODE" "{$PROJ_DIR$\msp430f5310_extra.c}.130.2@1" 0 0 0 0 "" 0 ""
 Bp10=_ "STD_CODE" "{$PROJ_DIR$\circuit.c}.62.2@1" 0 0 0 0 "" 0 ""
 Bp11=_ "STD_CODE" "{$PROJ_DIR$\main.c}.483.3@1" 0 0 0 0 "" 0 ""
 Bp12=_ "STD_CODE" "{$PROJ_DIR$\main.c}.575.10@1" 0 0 0 0 "" 0 ""
-Bp13=_ "STD_CODE" "{$PROJ_DIR$\main.c}.999.3@1" 0 0 0 0 "" 0 ""
+Bp13=_ "STD_CODE" "{$PROJ_DIR$\main.c}.1005.3@1" 0 0 0 0 "" 0 ""
 Bp14=_ "STD_CODE" "{$PROJ_DIR$\main.c}.733.13@1" 0 0 0 0 "" 0 ""
 Bp15=_ "STD_CODE" "{$PROJ_DIR$\buttonbuffer.c}.26.2@1" 0 0 0 0 "" 0 ""
 Bp16=_ "STD_CODE" "{$PROJ_DIR$\config.c}.325.5@1" 0 0 0 0 "" 0 ""
-Count=17
+Bp17=_ "STD_CODE" "{$PROJ_DIR$\main.c}.803.2@1" 1 0 0 0 "" 0 ""
+Bp18=_ "STD_CODE" "{$PROJ_DIR$\main.c}.798.3@1" 1 0 0 0 "" 0 ""
+Bp19=_ "STD_CODE" "{$PROJ_DIR$\main.c}.804.2@1" 1 0 0 0 "" 0 ""
+Count=20
 [FET]
 Clock mode=14
 Extended Clock mode=-1
@@ -98,6 +101,6 @@ SuppressDialog=0
 Enabled=0
 [DriverProfiling]
 Enabled=0
-Mode=737673728
+Mode=-1249790591
 Graph=0
 Symbiont=0
