@@ -1,18 +1,16 @@
 ; Set accelerometer range to 2 G. Break between a and r at 512 dfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdf
 ar = 2
-;Set accelerometer sample rate to 40 Hz. Remove spaces
-as=40
 ; Set gyroscope range to 500 dps. Add spaces
   gr  =  500  
-; Set gyroscope sample rate to 100 Hz. Carriage return
+; Set sample rate to 160 Hz. Remove spaces
+sr=160
+; Carriage return and space
 
-gs = 100 ; inline comment
  ; skip past blank key
  = value ; skip past blank key
 = ; skip past no key
 
-; Disable the accelerometer (enabled by default)
-disable_accel;inline comment
+; Disable the accelerometer (enabled by default). Remove spaces
+disable_accel;inline_comment
 ; Disable the gyroscope (enabled by default). Add spaces
-  disable_gyro  
-
+ disable_gyro ; inline comment

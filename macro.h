@@ -13,7 +13,7 @@
 #define _MACRO_H
 
 /* Uncomment for easier debugging */
-#define DEBUG
+//#define DEBUG
 
 /* Update for new firmware versions */
 #define FIRMWARE_NAME			"AG-1"
