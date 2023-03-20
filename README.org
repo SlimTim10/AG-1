@@ -4,14 +4,12 @@
 
 [[file:documents/image-002.jpg]]
 
-[[file:documents/image-005.jpg]]
-
-[[file:documents/orientation.jpg]]
-
 The AG-1 is a data logger that captures acceleration and gyroscope measurements. The data is written onto a microSD card as CSV files (Comma Separated Values files). It uses a 2 GB microSD card and writes one file for both acceleration measurements and gyroscope measurements. Data is read by
 ejecting the microSD card and reading the data using a separate microSD card reader. Power is supplied through the use of a rechargeable lithium-polymer battery which can be recharged using a Micro-USB port.
 
 Read the [[file:documents/user_manual.pdf][user manual]] for more information.
+
+[[file:documents/image-005.jpg]] [[file:documents/orientation.jpg]]
 
 ** Sample output
 
