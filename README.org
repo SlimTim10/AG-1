@@ -9,7 +9,9 @@ ejecting the microSD card and reading the data using a separate microSD card rea
 
 Read the [[file:documents/user_manual.pdf][user manual]] for more information.
 
-[[file:documents/image-005.jpg]] [[file:documents/orientation.jpg]]
+[[file:documents/image-005.jpg]]
+
+[[file:documents/orientation.jpg]]
 
 ** Sample output
 
