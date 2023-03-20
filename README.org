@@ -15,6 +15,26 @@ Read the [[file:documents/user_manual.pdf][user manual]] for more information.
 
 ** Sample output
 
+#+begin_example
+AG-1 v20140114
+sample-rate: 40 Hz
+accel range: +/-2 g (+/-32768)
+gyro range: +/-250 dps (+/-32768)
+dt units: 83.33 ns
+dt,accel(x,y,z),gyro(x,y,z)
+96677,7152,-7203,15898,-2137,2943,-1624
+176581,5821,-12369,15468,-2123,2909,-1669
+317107,4987,-12926,15021,-2166,2892,-1630
+317162,5862,-12627,15524,-2121,2927,-1647
+317187,3619,-13529,14020,-2163,2932,-1640
+317054,1639,-14138,11706,-2116,2947,-1673
+317115,3488,-13350,10795,-2120,2872,-1613
+317119,2981,-13788,8142,-2024,2930,-1561
+...
+#+end_example
+
 [[file:documents/DATA001.CSV][DATA001.CSV]]
+
 [[file:documents/DATA002.CSV][DATA002.CSV]]
+
 [[file:documents/DATA003.CSV][DATA003.CSV]]
