@@ -2,8 +2,6 @@
 
 ** Description
 
-#+ATTR_HTML: :width 300px
-
 [[file:documents/image-002.jpg]]
 
 [[file:documents/image-005.jpg]]
